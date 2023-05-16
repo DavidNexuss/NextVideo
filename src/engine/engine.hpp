@@ -4,8 +4,9 @@
 #include <vector>
 #include <unordered_map>
 
+//#define ENGINE_IMPL
 #define ENGINE_API
-#define DEBUG
+//#define DEBUG
 
 #ifdef DEBUG
 #  include <stdio.h>
@@ -22,9 +23,34 @@
 #else
 #  define ERROR(...)
 #  define LOG(...)
-#  define VERIFY(X)
+#  define VERIFY(X, ...)
 #endif
 
+
+template <typename T>
+bool valid(const std::vector<T>& container, int index) { return index >= 0 && index < container.size(); }
+
+template <typename T>
+struct idx_ptr {
+
+  idx_ptr(int _index, std::vector<T>* _container) {
+    index     = _index;
+    container = _container;
+  }
+
+  inline T* operator->() {
+    VERIFY(index >= 0 && index < container->size(), "Invalid index pointer\n");
+    return &(*container)[index];
+  }
+  inline operator int() {
+    VERIFY(index >= 0 && index < container->size(), "Invalid index pointer\n");
+    return index;
+  }
+
+  private:
+  int             index;
+  std::vector<T>* container;
+};
 /* USER API INTERFACE */
 namespace GLEngine {
 
@@ -108,20 +134,14 @@ struct Stage {
     skyTexture = -1;
   }
 
-  inline int addObject() {
+  inline idx_ptr<Object> addObject() {
     objects.emplace_back();
-    return objects.size() - 1;
+    return idx_ptr<Object>(objects.size() - 1, &objects);
   }
 
-  inline int addObjectGroup() {
+  inline idx_ptr<ObjectInstanceGroup> addObjectGroup() {
     instances.emplace_back();
-    return instances.size() - 1;
-  }
-  inline Object* ptrObject(int object) {
-    return &objects[object];
-  }
-  inline ObjectInstanceGroup* ptrObjectGroup(int instance) {
-    return &instances[instance];
+    return idx_ptr<ObjectInstanceGroup>(instances.size() - 1, &instances);
   }
 };
 
@@ -139,39 +159,25 @@ struct Scene {
 
   int addTexture(const char* path);
 
-  inline int addMaterial() {
+  inline idx_ptr<Material> addMaterial() {
     materials.emplace_back();
-    return materials.size() - 1;
+    return idx_ptr<Material>(materials.size() - 1, &materials);
   }
-  inline int addStandardMaterial() {
+  inline idx_ptr<Material> addStandardMaterial() {
     return addMaterial();
   }
-  inline int addOldMaterial() {
+  inline idx_ptr<Material> addOldMaterial() {
     return addMaterial();
   }
 
-  inline int addStage() {
+  inline idx_ptr<Stage> addStage() {
     stages.emplace_back();
-    return stages.size() - 1;
+    return idx_ptr<Stage>(stages.size() - 1, &stages);
   }
 
-  inline int addMesh() {
+  inline idx_ptr<Mesh> addMesh() {
     meshes.emplace_back();
-    return meshes.size() - 1;
-  }
-
-
-  inline Material* ptrMaterial(int matId) {
-    return &materials[matId];
-  }
-  inline Mesh* ptrMesh(int mesh) {
-    return &meshes[mesh];
-  }
-  inline Stage* ptrStage(int stage) {
-    return &stages[stage];
-  }
-  inline Texture* ptrTexture(int texture) {
-    return &textures[texture];
+    return idx_ptr<Mesh>(meshes.size() - 1, &meshes);
   }
 
   Stage* currentStage() {
@@ -182,18 +188,27 @@ struct Scene {
   void setCurrentStage(int index) { _currentStage = index; }
 };
 
-typedef struct {
-  int width;
-  int height;
-  int flag_useDefferedShading;
-  int flag_bloom;
-  int flag_hdr;
+typedef struct _ {
+  int width                   = 640;
+  int height                  = 480;
+  int flag_useDefferedShading = 0;
+  int flag_bloom              = 0;
+  int flag_hdr                = 0;
+  int gauss_passes            = 1;
 } RendererDesc;
 
+
+struct RendererInput {
+  int*  keyboard;
+  float x;
+  float y;
+};
+
 struct IRenderer {
-  virtual void render(Scene* scene) = 0;
-  virtual void upload(Scene* scene) = 0;
-  virtual int  pollEvents()         = 0;
+  virtual void          render(Scene* scene) = 0;
+  virtual void          upload(Scene* scene) = 0;
+  virtual int           pollEvents()         = 0;
+  virtual RendererInput input()              = 0;
   ~IRenderer();
 };
 
@@ -210,6 +225,12 @@ ENGINE_API IRenderer* rendererCreate(RendererDesc desc);
 
 #  define STB_IMAGE_WRITE_IMPLEMENTATION
 #  define STB_IMAGE_IMPLEMENTATION
+#  define VERIFY_FRAMEBUFFER                                                               \
+    do {                                                                                   \
+      GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);                            \
+      VERIFY(status == GL_FRAMEBUFFER_COMPLETE, "Framebuffer not complete! %d\n", status); \
+    } while (0)
+
 #  include <stb/stb_image.h>
 
 #  include <glm/ext.hpp>
@@ -248,6 +269,9 @@ ENGINE_API GLfloat* id() {
   return id;
 }
 
+ENGINE_API glm::mat4 rotate(glm::vec3 axis, float amount) {
+  return glm::rotate(glm::mat4(1.0f), amount, axis);
+}
 ENGINE_API glm::mat4 scale(glm::vec3 scale) {
   return glm::scale(glm::mat4(1.0f), scale);
 }
@@ -261,13 +285,13 @@ ENGINE_API glm::mat4 translate(float x, float y, float z) {
 }
 
 ENGINE_API float* meshTransformPlaneScreen() {
-  static glm::mat4 plane = scale(10.0) * translate(-0.5, 0, -0.5);
+  static glm::mat4 plane = rotate(glm::vec3(1, 0, 0), -M_PI / 2.0f) * scale(2.0) * translate(-0.5, 0, -0.5);
   return &plane[0][0];
 }
 
 ENGINE_API float* viewMatrix(glm::vec3& camPos, glm::vec3& camDir) {
   static glm::mat4 view;
-  view = glm::lookAt(camPos, camPos + camDir, glm::vec3(0, 1, 0));
+  view = glm::lookAt(camPos, camPos + camDir, glm::vec3(1, 0, 0));
   return &view[0][0];
 }
 ENGINE_API float* projMatrix(float ra) {
@@ -281,25 +305,24 @@ ENGINE_API float* projMatrix(float ra) {
 
 ENGINE_API Scene* sceneCreate() {
 
-  Scene* scene   = new Scene;
-  int    plain   = scene->addMesh();
-  Mesh*  meshPtr = scene->ptrMesh(plain);
+  Scene* scene = new Scene;
+  auto   plain = scene->addMesh();
 
   static float plainMesh[] = {
     0, 0, 0, /* POSITION*/ 0, 1, 0, /* NORMAL */ 0, 0, /* UV */
     0, 0, 1, /* POSITION*/ 0, 1, 0, /* NORMAL */ 0, 1, /* UV */
-    1, 0, 0, /* POSITION*/ 0, 1, 0, /* NORMAL */ 1, 0, /* UV */
     1, 0, 1, /* POSITION*/ 0, 1, 0, /* NORMAL */ 1, 1, /* UV */
+    1, 0, 0, /* POSITION*/ 0, 1, 0, /* NORMAL */ 1, 0, /* UV */
   };
 
   static unsigned int plainMeshEBO[] = {0, 1, 2, 2, 3, 0};
 
-  meshPtr->type                 = CUSTOM;
-  meshPtr->tCustom.meshFormat   = 0;
-  meshPtr->tCustom.numVertices  = 4;
-  meshPtr->tCustom.numIndices   = 6;
-  meshPtr->tCustom.vertexBuffer = plainMesh;
-  meshPtr->tCustom.indexBuffer  = plainMeshEBO;
+  plain->type                 = CUSTOM;
+  plain->tCustom.meshFormat   = 0;
+  plain->tCustom.numVertices  = 4;
+  plain->tCustom.numIndices   = 6;
+  plain->tCustom.vertexBuffer = plainMesh;
+  plain->tCustom.indexBuffer  = plainMeshEBO;
   return scene;
 }
 namespace SceneLoader {
@@ -332,8 +355,7 @@ ENGINE_API int processMaterial(int materialIdx, const aiScene* scene, Scene* tra
   aiMaterial* mat = scene->mMaterials[materialIdx];
 
 
-  int       traceMaterial    = tracerScene->addMaterial();
-  Material* traceMaterialPtr = tracerScene->ptrMaterial(traceMaterial);
+  auto traceMaterialPtr = tracerScene->addMaterial();
 
   mat->Get(AI_MATKEY_COLOR_DIFFUSE, traceMaterialPtr->kd);
   mat->Get(AI_MATKEY_COLOR_AMBIENT, traceMaterialPtr->ka);
@@ -352,8 +374,8 @@ ENGINE_API int processMaterial(int materialIdx, const aiScene* scene, Scene* tra
     }
   }
 
-  LOG("[LOADER] Material created %d\n", traceMaterial);
-  return cache.materialCache[materialIdx] = traceMaterial;
+  LOG("[LOADER] Material created %d\n", (int)traceMaterialPtr);
+  return cache.materialCache[materialIdx] = (int)traceMaterialPtr;
 }
 ENGINE_API int processMesh(int meshIdx, const aiScene* scene, Scene* tracerScene) {
 
@@ -406,8 +428,7 @@ ENGINE_API int processMesh(int meshIdx, const aiScene* scene, Scene* tracerScene
     exit(1);
   }
 
-  int   meshTracer    = tracerScene->addMesh();
-  Mesh* ptrMeshTracer = tracerScene->ptrMesh(meshTracer);
+  auto ptrMeshTracer = tracerScene->addMesh();
 
   ptrMeshTracer->type                 = CUSTOM;
   ptrMeshTracer->tCustom.numIndices   = ebo_count;
@@ -415,8 +436,8 @@ ENGINE_API int processMesh(int meshIdx, const aiScene* scene, Scene* tracerScene
   ptrMeshTracer->tCustom.vertexBuffer = vbo_data;
   ptrMeshTracer->tCustom.indexBuffer  = ebo_data;
 
-  LOG("[LOADER] Mesh created %d\n", meshTracer);
-  return cache.meshCache[meshIdx] = meshTracer;
+  LOG("[LOADER] Mesh created %d\n", (int)ptrMeshTracer);
+  return cache.meshCache[meshIdx] = (int)ptrMeshTracer;
 }
 
 
@@ -441,19 +462,17 @@ ENGINE_API void processNode(aiNode* node, const aiScene* scene, Scene* tracerSce
     aiVector3t<float> pos, scale, rot;
     node->mTransformation.Decompose(scale, rot, pos);
 
-    int     obj       = stage->addObject();
-    Object* objTracer = stage->ptrObject(obj);
+    auto obj = stage->addObject();
 
-    objTracer->mesh     = meshTracer;
-    objTracer->material = materialTrace;
+    obj->mesh     = meshTracer;
+    obj->material = materialTrace;
 
-    int                  instance       = stage->addObjectGroup();
-    ObjectInstanceGroup* instanceTracer = stage->ptrObjectGroup(instance);
+    auto instanceTracer = stage->addObjectGroup();
 
     instanceTracer->object = obj;
     instanceTracer->transforms.push_back(lin::translate(pos.x, pos.y, pos.z));
 
-    LOG("[LOADER] Object created %d\n", obj);
+    LOG("[LOADER] Object created %d\n", (int)obj);
   }
   // then do the same for each of its children
   for (unsigned int i = 0; i < node->mNumChildren; i++) {
@@ -517,8 +536,8 @@ struct Window {
   int   width;
   int   height;
   bool  needsUpdate;
-  int   x;
-  int   y;
+  float x;
+  float y;
   float ra;
   int   keyboard[512];
 };
@@ -533,6 +552,10 @@ ENGINE_API void GLAPIENTRY MessageCallback(GLenum source, GLenum type, GLuint id
 
 /* GLFW CALLBACKS */
 ENGINE_API void window_size_callback(GLFWwindow* window, int width, int height) {
+}
+
+void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
+
   auto* ptr = (Window*)glfwGetWindowUserPointer(window);
 
   glViewport(0, 0, width, height);
@@ -588,11 +611,13 @@ ENGINE_API Window* windowCreate(int width, int height) {
   glfwSetCursorPosCallback(window, cursor_position_callback);
   glfwSetScrollCallback(window, scroll_callback);
   glfwSetKeyCallback(window, key_callback);
+  glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
   LOG("Window created with %d %d\n", width, height);
 
-  Window* windowInstance    = new Window;
-  windowInstance->windowPtr = window;
+  Window* windowInstance      = new Window;
+  windowInstance->windowPtr   = window;
+  windowInstance->needsUpdate = true;
   glfwSetWindowUserPointer(window, windowInstance);
   return windowInstance;
 }
@@ -790,9 +815,14 @@ struct Renderer : public IRenderer {
   ENGINE_API void glUtilAttachScreenTexture(Renderer* renderer, int textureSlot, int attachment, GLenum type, GLenum format) {
     Window* window = renderer->window;
     if (window->needsUpdate) {
+
+      int width  = window->width;
+      int height = window->height;
+      VERIFY(width > 0, "Width not valid!\n");
+      VERIFY(width > 0, "Height not valid!\n");
       glActiveTexture(GL_TEXTURE0 + textureSlot);
       glBindTexture(GL_TEXTURE_2D, renderer->textures[textureSlot]);
-      glTexImage2D(GL_TEXTURE_2D, 0, format, window->width, window->height, 0, type, GL_UNSIGNED_BYTE, NULL);
+      glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, type, GL_UNSIGNED_BYTE, NULL);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
       glFramebufferTexture2D(GL_FRAMEBUFFER, attachment, GL_TEXTURE_2D, renderer->textures[textureSlot], 0);
@@ -804,8 +834,13 @@ struct Renderer : public IRenderer {
   ENGINE_API void glUtilAttachRenderBuffer(Renderer* renderer, int rbo, int attachment, GLenum type) {
     Window* window = renderer->window;
     if (window->needsUpdate) {
+
+      int width  = window->width;
+      int height = window->height;
+      VERIFY(width > 0, "Width not valid!\n");
+      VERIFY(width > 0, "Height not valid!\n");
       glBindRenderbuffer(GL_RENDERBUFFER, renderer->rbos[rbo]);
-      glRenderbufferStorage(GL_RENDERBUFFER, type, window->width, window->height);
+      glRenderbufferStorage(GL_RENDERBUFFER, type, width, height);
       glFramebufferRenderbuffer(GL_FRAMEBUFFER, attachment, GL_RENDERBUFFER, renderer->rbos[rbo]);
       LOG("[RENDERER] Generated render buffer for %d attachment %d\n", rbo, attachment);
     }
@@ -830,6 +865,8 @@ struct Renderer : public IRenderer {
           glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         }
 
+
+        LOG("[RENDERER] Uploading texture [%d] width %d height %d channels %d\n", i, textureTable[i].width, textureTable[i].height, textureTable[i].channels);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, textureTable[i].width, textureTable[i].height, 0, GL_RGB, GL_UNSIGNED_BYTE, textureTable[i].data);
         if (textureTable[i].useMipmapping)
           glGenerateMipmap(GL_TEXTURE_2D);
@@ -839,10 +876,8 @@ struct Renderer : public IRenderer {
 
     //Buffer loading
     {
-      const Mesh* meshList = scene->ptrMesh(0);
-
       for (int i = 0; i < scene->meshes.size(); i++) {
-        Mesh* mesh = scene->ptrMesh(i);
+        Mesh* mesh = &scene->meshes[i];
         if (mesh->type == CUSTOM) {
           float*        vbo = mesh->tCustom.vertexBuffer;
           unsigned int* ebo = mesh->tCustom.indexBuffer;
@@ -906,6 +941,7 @@ struct Renderer : public IRenderer {
     glUtilAttachScreenTexture(renderer, TEXT_ATTACHMENT_COLOR, GL_COLOR_ATTACHMENT0, GL_RGB, GL_RGB16F);
     glUtilAttachScreenTexture(renderer, TEXT_ATTACHMENT_BLOOM, GL_COLOR_ATTACHMENT1, GL_RGB, GL_RGB16F);
     glDrawBuffers(2, attachments);
+    VERIFY_FRAMEBUFFER;
   }
 
   ENGINE_API int rendererFilterGauss(Renderer* renderer, int src, int pingTexture, int pongTexture, int passes) {
@@ -918,6 +954,8 @@ struct Renderer : public IRenderer {
       bool horizontal = i % 2;
       glBindFramebuffer(GL_FRAMEBUFFER, renderer->fbos[FBO_GAUSS_PASS_PING + horizontal]);
       glUtilAttachScreenTexture(renderer, out, GL_COLOR_ATTACHMENT0, GL_RGB, GL_RGB16F);
+      glDrawBuffers(1, attachments);
+      VERIFY_FRAMEBUFFER;
       glUniform1i(renderer->filter_gauss_u_input, in);
       glUniform1i(renderer->filter_gauss_u_horizontal, 1);
       glUtilRenderScreenQuad();
@@ -939,6 +977,11 @@ struct Renderer : public IRenderer {
       Object*              obj  = &stage->objects[g->object];
       Mesh*                mesh = &scene->meshes[obj->mesh];
       Material*            mat  = &scene->materials[obj->material];
+
+
+      VERIFY(valid(stage->objects, g->object), "Invalid object index %d\n", g->object);
+      VERIFY(valid(scene->materials, obj->material), "Invalid material index %d\n", obj->material);
+      VERIFY(valid(scene->meshes, obj->mesh), "Invalid mesh index %d\n", obj->mesh);
 
       //Bind mesh and materials
       int vertexCount = bindMesh(renderer, mesh, obj->mesh);
@@ -979,7 +1022,7 @@ struct Renderer : public IRenderer {
     rendererPass(renderer, scene);
     rendererEnd();
 
-    int gaussBloomResult = rendererFilterGauss(renderer, TEXT_ATTACHMENT_BLOOM, TEXT_GAUSS_RESULT0, TEXT_GAUSS_RESULT02, 1);
+    int gaussBloomResult = rendererFilterGauss(renderer, TEXT_ATTACHMENT_BLOOM, TEXT_GAUSS_RESULT0, TEXT_GAUSS_RESULT02, desc.gauss_passes);
     glUseProgram(renderer->programPostHDR);
     glUniform1i(renderer->hdr_u_bloom, gaussBloomResult);
     glUniform1i(renderer->hdr_u_color, TEXT_ATTACHMENT_COLOR);
@@ -991,8 +1034,9 @@ struct Renderer : public IRenderer {
   }
   ENGINE_API void render(Scene* scene) override {
 
+    if (window->width <= 0 || window->height <= 0) return;
     glBindVertexArray(vao);
-    rendererPass(this, scene);
+    rendererHDR(this, scene);
     window->needsUpdate = 0;
     glBindVertexArray(0);
   }
@@ -1001,6 +1045,14 @@ struct Renderer : public IRenderer {
     glfwSwapBuffers((GLFWwindow*)window->windowPtr);
     glfwPollEvents();
     return !glfwWindowShouldClose((GLFWwindow*)window->windowPtr);
+  }
+
+  RendererInput input() override {
+    RendererInput in;
+    in.keyboard = window->keyboard;
+    in.x        = window->x;
+    in.y        = window->y;
+    return in;
   }
 };
 
@@ -1055,7 +1107,7 @@ ENGINE_API IRenderer* rendererCreate(RendererDesc desc) {
 
 #  define UNIFORM_ASSIGN(u)                                             \
     renderer->pbr_##u = glGetUniformLocation(renderer->programPbr, #u); \
-    //LOG(#u " -> %d\n", renderer->pbr_##u);                              \
+  //LOG(#u " -> %d\n", renderer->pbr_##u);                              \
     //VERIFY(renderer->pbr_##u != -1, "Invalid uniform\n");
   UNIFORMLIST(UNIFORM_ASSIGN)
 #  undef UNIFORM_ASSIGN
@@ -1070,7 +1122,7 @@ ENGINE_API IRenderer* rendererCreate(RendererDesc desc) {
 #  define UNIFORM_ASSIGN(u)                                   \
     renderer->filter_gauss_##u =                              \
       glGetUniformLocation(renderer->programGaussFilter, #u); \
-    //LOG(#u " -> %d\n", renderer->filter_gauss_##u);           \
+  //LOG(#u " -> %d\n", renderer->filter_gauss_##u);           \
     //VERIFY(renderer->filter_gauss_##u != -1, "Invalid uniform\n");
   UNIFORMLIST_GAUSS(UNIFORM_ASSIGN)
 #  undef UNIFORM_ASSIGN
