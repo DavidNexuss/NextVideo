@@ -7,6 +7,8 @@
 #define ENGINE_API
 #define DEBUG
 
+#define SAFETY(X) \
+  do { X; } while (0);
 #ifdef DEBUG
 #  include <stdio.h>
 #  define ERROR(...) dprintf(2, __VA_ARGS__)

@@ -521,6 +521,8 @@ ENGINE_API GLuint glUtilLoadProgram(const char* vs, const char* fs) {
 
 /* Renderer begin */
 /* Engine Default Variables */
+static int PARAM_BLOOM_CHAIN_LENGTH = 5;
+
 static int BUFF_START_USER       = 0;
 static int BUFF_PLAIN            = 0;
 static int TEXT_STD              = 0;
@@ -535,17 +537,22 @@ static int TEXT_GAUSS_RESULT2    = 8;
 static int TEXT_GAUSS_RESULT22   = 9;
 static int TEXT_GAUSS_RESULT3    = 10;
 static int TEXT_GAUSS_RESULT32   = 11;
-static int TEXT_START_USER       = 32;
+static int TEXT_BLOOM_START      = 12;
+static int TEXT_BLOOM_END        = TEXT_BLOOM_START + PARAM_BLOOM_CHAIN_LENGTH;
+static int TEXT_END              = TEXT_BLOOM_END;
+static int TEXT_START_USER       = TEXT_END + 1;
 static int FBO_HDR_PASS          = 0;
 static int FBO_GAUSS_PASS_PING   = 1;
 static int FBO_GAUSS_PASS_PONG   = 2;
-static int FBO_START_USER        = 3;
+static int FBO_BLOOM             = 3;
+static int FBO_START_USER        = 4;
 static int RBO_HDR_PASS_DEPTH    = 0;
 
-#define UNIFORMLIST_HDR(o) o(u_color) o(u_bloom)
-
-#define UNIFORMLIST_FILTER(o) o(u_input)
-#define UNIFORMLIST_GAUSS(o)  o(u_input) o(u_horizontal)
+#define UNIFORMLIST_HDR(o)        o(u_color) o(u_bloom)
+#define UNIFORMLIST_FILTER(o)     o(u_input)
+#define UNIFORMLIST_GAUSS(o)      o(u_input) o(u_horizontal)
+#define UNIFORMLIST_UPSAMPLE(o)   o(srcTexture) o(filterRadius)
+#define UNIFORMLIST_DOWNSAMPLE(o) o(srcTexture) o(srcResolution)
 
 #define UNIFORMLIST(o)                                                  \
   o(u_envMap) o(u_diffuseTexture) o(u_specularTexture) o(u_bumpTexture) \
@@ -569,6 +576,8 @@ struct Renderer : public IRenderer {
   /* Default programs */
   GLuint programPbr;
   GLuint programGaussFilter;
+  GLuint programUpsample;
+  GLuint programDownsample;
   GLuint programPostHDR;
 
 #define UNIFORM_DECL(u) GLuint pbr_##u;
@@ -583,6 +592,14 @@ struct Renderer : public IRenderer {
   UNIFORMLIST_GAUSS(UNIFORM_DECL)
 #undef UNIFORM_DECL
 
+#define UNIFORM_DECL(u) GLuint filter_upsample_##u;
+  UNIFORMLIST_UPSAMPLE(UNIFORM_DECL)
+#undef UNIFORM_DECL
+
+#define UNIFORM_DECL(u) GLuint filter_downsample_##u;
+  UNIFORMLIST_DOWNSAMPLE(UNIFORM_DECL)
+#undef UNIFORM_DECL
+
 
   /* Debug checks */
 
@@ -595,6 +612,12 @@ struct Renderer : public IRenderer {
     }
 
     return true;
+  }
+
+  int bindTexture(int textureSlot) {
+    glActiveTexture(GL_TEXTURE0 + textureSlot);
+    glBindTexture(GL_TEXTURE_2D, textures[textureSlot]);
+    return textureSlot;
   }
 
   const inline static unsigned int attachments[] = {
@@ -757,6 +780,75 @@ struct Renderer : public IRenderer {
     return out;
   }
 
+  ENGINE_API int rendererFilterBloom(int src, float width, float height, float filterRadius) {
+    glBindFramebuffer(GL_FRAMEBUFFER, fbos[FBO_BLOOM]);
+
+    glm::vec2 srcSize(width, height);
+
+    if (window->needsUpdate) {
+      LOG("[RENDERER] Bloom update texture and framebuffer");
+      glm::vec2 size(width, height);
+      for (int i = 0; i < PARAM_BLOOM_CHAIN_LENGTH; i++) {
+        size /= 2;
+        bindTexture(i + TEXT_BLOOM_START);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_R11F_G11F_B10F, (int)size.x, (int)size.y, 0, GL_RGB, GL_FLOAT, 0);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        SAFETY(glActiveTexture(GL_TEXTURE0));
+      }
+
+      glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textures[TEXT_BLOOM_START], 0);
+      glDrawBuffers(1, attachments);
+      VERIFY_FRAMEBUFFER;
+    }
+
+
+    glm::vec2 size(width, height);
+    //Downsample
+    {
+      glUseProgram(programDownsample);
+      bindTexture(src);
+      glUniform2f(filter_downsample_srcResolution, size.x, size.y);
+      glUniform1i(filter_downsample_srcTexture, src);
+      for (int i = 0; i < PARAM_BLOOM_CHAIN_LENGTH; i++) {
+        glViewport(0, 0, size.x / 2, size.y / 2);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textures[i + TEXT_BLOOM_START], 0);
+        VERIFY_FRAMEBUFFER;
+        glUtilRenderScreenQuad();
+        size = size / 2.0f;
+        glUniform2f(filter_downsample_srcResolution, size.x, size.y);
+        glUniform1i(filter_downsample_srcTexture, i + TEXT_BLOOM_START);
+      }
+    }
+    //Upsample
+    {
+      glUseProgram(programUpsample);
+      glUniform1i(filter_upsample_filterRadius, filterRadius);
+      glEnable(GL_BLEND);
+      glBlendFunc(GL_ONE, GL_ONE);
+      glBlendEquation(GL_FUNC_ADD);
+
+      for (int i = PARAM_BLOOM_CHAIN_LENGTH - 1; i > 0; i--) {
+        int texture        = TEXT_BLOOM_START + i;
+        int nextMipTexture = texture - 1;
+
+        glUniform1i(filter_upsample_srcTexture, texture);
+        glViewport(0, 0, size.x * 2, size.y * 2);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textures[nextMipTexture], 0);
+        VERIFY_FRAMEBUFFER;
+        glUtilRenderScreenQuad();
+
+        size *= 2.0f;
+      }
+      glDisable(GL_BLEND);
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, window->width, window->height);
+    return TEXT_BLOOM_START;
+  }
+
   ENGINE_API void renderScene(Renderer* renderer, Scene* scene, Stage* stage, float* viewMat, float* projMat) {
 
     glUniformMatrix4fv(renderer->pbr_u_ViewMat, 1, 0, viewMat);
@@ -812,9 +904,10 @@ struct Renderer : public IRenderer {
     rendererPass(renderer, scene);
     rendererEnd();
 
-    int gaussBloomResult = rendererFilterGauss(renderer, TEXT_ATTACHMENT_BLOOM, TEXT_GAUSS_RESULT0, TEXT_GAUSS_RESULT02, desc.gauss_passes);
+    //int gaussBloomResult = rendererFilterGauss(renderer, TEXT_ATTACHMENT_BLOOM, TEXT_GAUSS_RESULT0, TEXT_GAUSS_RESULT02, desc.gauss_passes);
+    int bloomResult = rendererFilterBloom(TEXT_ATTACHMENT_BLOOM, window->width, window->height, 3.0f);
     glUseProgram(renderer->programPostHDR);
-    glUniform1i(renderer->hdr_u_bloom, gaussBloomResult);
+    glUniform1i(renderer->hdr_u_bloom, bloomResult);
     glUniform1i(renderer->hdr_u_color, TEXT_ATTACHMENT_COLOR);
 
     VERIFY(renderer->hdr_u_bloom != renderer->hdr_u_color, "Invalid uniform values\n");
@@ -898,6 +991,8 @@ ENGINE_API IRenderer* rendererCreate(RendererDesc desc) {
   renderer->programPbr         = glUtilLoadProgram("assets/pbr.vs", "assets/pbr.fs");
   renderer->programGaussFilter = glUtilLoadProgram("assets/filter.vs", "assets/gauss.fs");
   renderer->programPostHDR     = glUtilLoadProgram("assets/filter.vs", "assets/hdr.fs");
+  renderer->programUpsample    = glUtilLoadProgram("assets/filter.vs", "assets/upsample.fs");
+  renderer->programDownsample  = glUtilLoadProgram("assets/filter.vs", "assets/downsample.fs");
 
 #define UNIFORM_ASSIGN(u)                                             \
   renderer->pbr_##u = glGetUniformLocation(renderer->programPbr, #u); \
@@ -917,8 +1012,24 @@ ENGINE_API IRenderer* rendererCreate(RendererDesc desc) {
   renderer->filter_gauss_##u =                              \
     glGetUniformLocation(renderer->programGaussFilter, #u); \
   //LOG(#u " -> %d\n", renderer->filter_gauss_##u);           \
-    //VERIFY(renderer->filter_gauss_##u != -1, "Invalid uniform\n");
+    VERIFY(renderer->filter_gauss_##u != -1, "Invalid uniform\n");
   UNIFORMLIST_GAUSS(UNIFORM_ASSIGN)
+#undef UNIFORM_ASSIGN
+
+#define UNIFORM_ASSIGN(u)                                \
+  renderer->filter_upsample_##u =                        \
+    glGetUniformLocation(renderer->programUpsample, #u); \
+  LOG(#u " -> %d\n", renderer->filter_upsample_##u);     \
+  VERIFY(renderer->filter_upsample_##u != -1, "Invalid uniform\n");
+  UNIFORMLIST_UPSAMPLE(UNIFORM_ASSIGN)
+#undef UNIFORM_ASSIGN
+
+#define UNIFORM_ASSIGN(u)                                  \
+  renderer->filter_downsample_##u =                        \
+    glGetUniformLocation(renderer->programDownsample, #u); \
+  LOG(#u " -> %d\n", renderer->filter_downsample_##u);     \
+  VERIFY(renderer->filter_downsample_##u != -1, "Invalid uniform\n");
+  UNIFORMLIST_DOWNSAMPLE(UNIFORM_ASSIGN)
 #undef UNIFORM_ASSIGN
 
   LOG("[Renderer] Render create completed.\n");
