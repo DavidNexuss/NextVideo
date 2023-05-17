@@ -4,9 +4,9 @@
 #include <vector>
 #include <unordered_map>
 
-//#define ENGINE_IMPL
+// #define ENGINE_IMPL
 #define ENGINE_API
-//#define DEBUG
+#define DEBUG
 
 #ifdef DEBUG
 #  include <stdio.h>
@@ -807,6 +807,19 @@ struct Renderer : public IRenderer {
 #  undef UNIFORM_DECL
 
 
+  /* Debug checks */
+
+  bool checkScene(Scene* scene) {
+    for (Material& mat : scene->materials) {
+      VERIFY(mat.albedoTexture < scene->textures.size(), "Invalid texture index\n");
+      VERIFY(mat.normalTexture < scene->textures.size(), "Invalid texture index\n");
+      VERIFY(mat.emissionTexture < scene->textures.size(), "Invalid texture index\n");
+      VERIFY(mat.roughnessTexture < scene->textures.size(), "Invalid texture index\n");
+    }
+
+    return true;
+  }
+
   const inline static unsigned int attachments[] = {
     GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2,
     GL_COLOR_ATTACHMENT3, GL_COLOR_ATTACHMENT4, GL_COLOR_ATTACHMENT5,
@@ -1026,6 +1039,8 @@ struct Renderer : public IRenderer {
     glUseProgram(renderer->programPostHDR);
     glUniform1i(renderer->hdr_u_bloom, gaussBloomResult);
     glUniform1i(renderer->hdr_u_color, TEXT_ATTACHMENT_COLOR);
+
+    VERIFY(renderer->hdr_u_bloom != renderer->hdr_u_color, "Invalid uniform values\n");
     glUtilRenderScreenQuad();
   }
 
@@ -1035,6 +1050,8 @@ struct Renderer : public IRenderer {
   ENGINE_API void render(Scene* scene) override {
 
     if (window->width <= 0 || window->height <= 0) return;
+
+    VERIFY(checkScene(scene), "Invalid scene graph\n");
     glBindVertexArray(vao);
     rendererHDR(this, scene);
     window->needsUpdate = 0;
@@ -1115,8 +1132,8 @@ ENGINE_API IRenderer* rendererCreate(RendererDesc desc) {
 #  define UNIFORM_ASSIGN(u)                                                 \
     renderer->hdr_##u = glGetUniformLocation(renderer->programPostHDR, #u); \
     //LOG(#u " -> %d\n", renderer->hdr_##u);                                  \
-    //VERIFY(renderer->hdr_##u != -1, "Invalid uniform\n");                   \
-    UNIFORMLIST_HDR(UNIFORM_ASSIGN)
+    //VERIFY(renderer->hdr_##u != -1, "Invalid uniform\n");
+  UNIFORMLIST_HDR(UNIFORM_ASSIGN)
 #  undef UNIFORM_ASSIGN
 
 #  define UNIFORM_ASSIGN(u)                                   \

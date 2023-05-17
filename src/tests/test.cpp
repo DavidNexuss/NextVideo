@@ -3,8 +3,7 @@
 using namespace GLEngine;
 void initScene(Scene* scene) {
   scene->addTexture("assets/envMap.jpg");
-  scene->addMaterial()->albedoTexture =
-    scene->addTexture("assets/checker.png");
+  scene->addMaterial()->albedoTexture = scene->addTexture("assets/checker.png");
 
   auto plane         = scene->currentStage()->addObject();
   auto planeInstance = scene->currentStage()->addObjectGroup();
@@ -26,9 +25,9 @@ void updateScene(Scene* scene, RendererInput input) {
   velocity.z += input.keyboard['w'] - input.keyboard['s'];
 
   scene->currentStage()->camPos += velocity;
-  scene->currentStage()->camDir.x = cos(input.x);
-  scene->currentStage()->camDir.z = sin(input.x);
-  scene->currentStage()->camDir.y = cos(input.y);
+  scene->currentStage()->camDir.x = cos(input.x * 2 * M_PI);
+  scene->currentStage()->camDir.z = sin(input.x * 2 * M_PI);
+  scene->currentStage()->camDir.y = cos(input.y * 2 * M_PI);
 }
 
 int main() {
