@@ -190,12 +190,13 @@ struct Scene {
 };
 
 typedef struct _ {
-  int width                   = 640;
-  int height                  = 480;
-  int flag_useDefferedShading = 0;
-  int flag_bloom              = 0;
-  int flag_hdr                = 0;
-  int gauss_passes            = 1;
+  int   width           = 640;
+  int   height          = 480;
+  int   deferred_enable = 0;
+  int   hdr_enable      = 0;
+  float bloom_radius    = 1.5f;
+  int   bloom_sampling  = 2;
+  bool  bloom_enable    = 0;
 } RendererDesc;
 
 
@@ -211,6 +212,11 @@ struct IRenderer {
   virtual int           pollEvents()         = 0;
   virtual RendererInput input()              = 0;
   ~IRenderer();
+
+  inline RendererDesc& desc() { return _desc; }
+
+  protected:
+  RendererDesc _desc;
 };
 
 ENGINE_API Scene*     sceneCreate();

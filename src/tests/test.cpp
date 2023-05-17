@@ -2,7 +2,7 @@
 
 using namespace GLEngine;
 void initScene(Scene* scene) {
-  scene->addTexture("assets/envMap.jpg");
+  scene->addTexture("assets/equi2.png");
   scene->addMaterial()->albedoTexture = scene->addTexture("assets/checker.png");
 
   auto plane         = scene->currentStage()->addObject();
@@ -33,17 +33,18 @@ void updateScene(Scene* scene, RendererInput input) {
 int main() {
 
   RendererDesc desc;
-  desc.width                   = 800;
-  desc.height                  = 600;
-  desc.flag_hdr                = 1;
-  desc.flag_bloom              = 1;
-  desc.flag_useDefferedShading = 0;
-  IRenderer* renderer          = rendererCreate(desc);
+  desc.width          = 800;
+  desc.height         = 600;
+  desc.bloom_enable   = 1;
+  desc.hdr_enable     = 1;
+  desc.bloom_sampling = 3;
+  IRenderer* renderer = rendererCreate(desc);
 
   Scene* scene = sceneCreate();
   initScene(scene);
   renderer->upload(scene);
   do {
+    renderer->desc().bloom_radius += 0.01f;
     renderer->render(scene);
     updateScene(scene, renderer->input());
   } while (renderer->pollEvents());

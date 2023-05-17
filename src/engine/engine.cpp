@@ -521,7 +521,7 @@ ENGINE_API GLuint glUtilLoadProgram(const char* vs, const char* fs) {
 
 /* Renderer begin */
 /* Engine Default Variables */
-static int PARAM_BLOOM_CHAIN_LENGTH = 4;
+static int PARAM_BLOOM_CHAIN_LENGTH = 8;
 
 static int BUFF_START_USER       = 0;
 static int BUFF_PLAIN            = 0;
@@ -780,15 +780,20 @@ struct Renderer : public IRenderer {
     return out;
   }
 
-  ENGINE_API int rendererFilterBloom(int src, float width, float height, float filterRadius) {
+  ENGINE_API int rendererFilterBloom(int src, float width, float height, float filterRadius, int count) {
     glBindFramebuffer(GL_FRAMEBUFFER, fbos[FBO_BLOOM]);
 
     glm::vec2 srcSize(width, height);
 
+    const int bloom_length = std::min(PARAM_BLOOM_CHAIN_LENGTH, count);
+
+    VERIFY(bloom_length > 0, "Invalid bloom length");
+    VERIFY(filterRadius >= 1.0f, "Invalid filterRadius");
+
     if (window->needsUpdate) {
       LOG("[RENDERER] Bloom update texture and framebuffer");
       glm::vec2 size(width, height);
-      for (int i = 0; i < PARAM_BLOOM_CHAIN_LENGTH; i++) {
+      for (int i = 0; i < bloom_length; i++) {
         size /= 2;
         bindTexture(i + TEXT_BLOOM_START);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_R11F_G11F_B10F, (int)size.x, (int)size.y, 0, GL_RGB, GL_FLOAT, 0);
@@ -812,7 +817,7 @@ struct Renderer : public IRenderer {
       bindTexture(src);
       glUniform2f(filter_downsample_srcResolution, size.x, size.y);
       glUniform1i(filter_downsample_srcTexture, src);
-      for (int i = 0; i < PARAM_BLOOM_CHAIN_LENGTH; i++) {
+      for (int i = 0; i < bloom_length; i++) {
         glViewport(0, 0, size.x / 2, size.y / 2);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textures[i + TEXT_BLOOM_START], 0);
         VERIFY_FRAMEBUFFER;
@@ -830,7 +835,7 @@ struct Renderer : public IRenderer {
       glBlendFunc(GL_ONE, GL_ONE);
       glBlendEquation(GL_FUNC_ADD);
 
-      for (int i = PARAM_BLOOM_CHAIN_LENGTH - 1; i > 0; i--) {
+      for (int i = bloom_length - 1; i > 0; i--) {
         int texture        = TEXT_BLOOM_START + i;
         int nextMipTexture = texture - 1;
 
@@ -905,7 +910,7 @@ struct Renderer : public IRenderer {
     rendererEnd();
 
     //int gaussBloomResult = rendererFilterGauss(renderer, TEXT_ATTACHMENT_BLOOM, TEXT_GAUSS_RESULT0, TEXT_GAUSS_RESULT02, desc.gauss_passes);
-    int bloomResult = rendererFilterBloom(TEXT_ATTACHMENT_BLOOM, window->width, window->height, 5.0f);
+    int bloomResult = rendererFilterBloom(TEXT_ATTACHMENT_BLOOM, window->width, window->height, _desc.bloom_radius, _desc.bloom_sampling);
     glUseProgram(renderer->programPostHDR);
     glUniform1i(renderer->hdr_u_bloom, bloomResult);
     glUniform1i(renderer->hdr_u_color, TEXT_ATTACHMENT_COLOR);
@@ -941,10 +946,14 @@ struct Renderer : public IRenderer {
     in.y        = window->y;
     return in;
   }
+
+  Renderer(RendererDesc desc) {
+    this->_desc = desc;
+  }
 };
 
 ENGINE_API IRenderer* rendererCreate(RendererDesc desc) {
-  Renderer* renderer = new Renderer;
+  Renderer* renderer = new Renderer(desc);
   renderer->desc     = desc;
   renderer->window   = windowCreate(renderer->desc.width, renderer->desc.height);
   if (renderer->window == NULL) {
