@@ -521,7 +521,7 @@ ENGINE_API GLuint glUtilLoadProgram(const char* vs, const char* fs) {
 
 /* Renderer begin */
 /* Engine Default Variables */
-static int PARAM_BLOOM_CHAIN_LENGTH = 5;
+static int PARAM_BLOOM_CHAIN_LENGTH = 4;
 
 static int BUFF_START_USER       = 0;
 static int BUFF_PLAIN            = 0;
@@ -905,7 +905,7 @@ struct Renderer : public IRenderer {
     rendererEnd();
 
     //int gaussBloomResult = rendererFilterGauss(renderer, TEXT_ATTACHMENT_BLOOM, TEXT_GAUSS_RESULT0, TEXT_GAUSS_RESULT02, desc.gauss_passes);
-    int bloomResult = rendererFilterBloom(TEXT_ATTACHMENT_BLOOM, window->width, window->height, 3.0f);
+    int bloomResult = rendererFilterBloom(TEXT_ATTACHMENT_BLOOM, window->width, window->height, 5.0f);
     glUseProgram(renderer->programPostHDR);
     glUniform1i(renderer->hdr_u_bloom, bloomResult);
     glUniform1i(renderer->hdr_u_color, TEXT_ATTACHMENT_COLOR);
