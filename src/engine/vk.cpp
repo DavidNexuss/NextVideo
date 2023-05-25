@@ -6,6 +6,7 @@
 #include <limits>    // Necessary for std::numeric_limits
 #include <algorithm> // Necessary for std::clamp
 #include <set>
+#include <memory>
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
@@ -22,6 +23,119 @@ static const char* engineName      = "No engine";
 static const char* applicationName = "Test application";
 
 struct VKRenderer : public IRenderer {
+
+  struct IO {
+    struct buffer {
+      char* data;
+      int   count;
+    };
+  };
+
+  IO io;
+  template <typename T>
+  using ptr = std::unique_ptr<T>;
+
+
+  template <typename T, typename... Args>
+  ptr<T> make_ptr(Args&&... args) { return std::make_unique<T>(std::forward<Args>(args)...); }
+
+
+  /* VK Util */
+
+  struct Image {
+    VkImage     image;
+    VkFormat    format;
+    VkImageView defaultView;
+    VkDevice    owner;
+
+    VkImageView getDefaultView() {
+      if (defaultView == VK_NULL_HANDLE) {
+
+        VkImageViewCreateInfo createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        createInfo.image = image;
+
+        createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        createInfo.format   = format;
+
+        createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+        createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+        createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+        createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+
+        createInfo.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+        createInfo.subresourceRange.baseMipLevel   = 0;
+        createInfo.subresourceRange.levelCount     = 1;
+        createInfo.subresourceRange.baseArrayLayer = 0;
+        createInfo.subresourceRange.layerCount     = 1;
+
+        HARD_CHECK(vkCreateImageView(owner, &createInfo, nullptr, &defaultView) == VK_SUCCESS, "Error creating image view\n");
+        LOG("[VK] Image view created\n");
+      }
+      return defaultView;
+    }
+
+
+    Image(VkImage image, VkFormat format, VkDevice owner) {
+      this->image  = image;
+      this->owner  = owner;
+      this->format = format;
+    }
+
+    ~Image() {
+      LOG("[VK] Image destroyed");
+    }
+  };
+
+  enum ShaderStages {
+    VERTEX = 0,
+    FRAGMENT,
+    SHADER_STAGES_COUNT
+  };
+
+  struct PipelineDesc {
+    IO::buffer shaders[5];
+  };
+
+  struct Pipeline {
+    VkPipeline pipeline;
+    VkDevice   owner;
+
+    Pipeline(PipelineDesc desc) { this->desc = desc; }
+    ~Pipeline() {}
+
+    PipelineDesc desc;
+  };
+
+  VkShaderModule shaderModuleCreate(IO::buffer buffer, VkDevice device) {
+    if (buffer.data == nullptr) return VK_NULL_HANDLE;
+    VkShaderModuleCreateInfo createInfo{};
+    createInfo.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    createInfo.codeSize = buffer.count;
+    createInfo.pCode    = reinterpret_cast<const uint32_t*>(buffer.data);
+    VkShaderModule result;
+    HARD_CHECK(vkCreateShaderModule(device, &createInfo, nullptr, &result) == VK_SUCCESS, "Could not create shader module\n");
+    return result;
+  }
+
+  Pipeline* pipelineCreate(PipelineDesc desc, VkDevice device) {
+    Pipeline* pip = new Pipeline(desc);
+
+    bool                            presentShaders[SHADER_STAGES_COUNT];
+    VkShaderModule                  shaderModules[SHADER_STAGES_COUNT];
+    VkPipelineShaderStageCreateInfo shaderStages_ci[SHADER_STAGES_COUNT];
+
+    int baseIdx = 0;
+    for (int i = 0; i < SHADER_STAGES_COUNT; i++) {
+      if ((shaderModules[i] = shaderModuleCreate(desc.shaders[i], device)) != VK_NULL_HANDLE) {
+        presentShaders[i] = true;
+      };
+    }
+
+
+
+    return pip;
+  }
 
   /* VK CALLBACKS */
 
@@ -260,7 +374,6 @@ struct VKRenderer : public IRenderer {
   };
 
   SwapChainSupportDetails physicalDeviceSwapChainSupport(VkPhysicalDevice device, VkSurfaceKHR surface) {
-    LOG("[VK] Querying swapchain support");
     SwapChainSupportDetails details;
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities);
 
@@ -282,11 +395,18 @@ struct VKRenderer : public IRenderer {
   }
 
   struct SwapChain {
-    VkSurfaceFormatKHR surfaceFormat;
-    VkPresentModeKHR   presentMode;
-    VkExtent2D         extent;
-    int                imageCount;
-    VkSwapchainKHR     swapChain;
+    VkSurfaceFormatKHR      surfaceFormat;
+    VkPresentModeKHR        presentMode;
+    VkExtent2D              extent;
+    int                     imageCount;
+    VkSwapchainKHR          swapChain;
+    VkDevice                owner;
+    std::vector<ptr<Image>> swapChainImages;
+
+    ~SwapChain() {
+      vkDestroySwapchainKHR(owner, swapChain, nullptr);
+      LOG("[VK] Swapchain destroyed\n");
+    }
   };
 
 
@@ -325,37 +445,51 @@ struct VKRenderer : public IRenderer {
     }
   }
 
-  SwapChain swapChainCreate(SwapChainSupportDetails swapChainSupport, ISurface* surfaceWindow, VkSurfaceKHR surface, VkDevice device) {
-    SwapChain swapChain;
+  SwapChain* swapChainCreate(SwapChainSupportDetails swapChainSupport, ISurface* surfaceWindow, VkSurfaceKHR surface, VkDevice device) {
+    SwapChain* swapChain = new SwapChain;
+    swapChain->owner     = device;
 
-    swapChain.surfaceFormat = swapChainChooseFormat(swapChainSupport.formats);
-    swapChain.presentMode   = swapChainChoosePresentMode(swapChainSupport.presentModes);
-    swapChain.extent        = swapChainChooseSwapExtent(swapChainSupport.capabilities, surfaceWindow);
+    swapChain->surfaceFormat = swapChainChooseFormat(swapChainSupport.formats);
+    swapChain->presentMode   = swapChainChoosePresentMode(swapChainSupport.presentModes);
+    swapChain->extent        = swapChainChooseSwapExtent(swapChainSupport.capabilities, surfaceWindow);
 
-    swapChain.imageCount = swapChainSupport.capabilities.minImageCount + 1;
+    swapChain->imageCount = swapChainSupport.capabilities.minImageCount + 1;
 
-    if (swapChainSupport.capabilities.maxImageCount > 0 && swapChain.imageCount > swapChainSupport.capabilities.maxImageCount) {
-      swapChain.imageCount = swapChainSupport.capabilities.maxImageCount;
+    if (swapChainSupport.capabilities.maxImageCount > 0 && swapChain->imageCount > swapChainSupport.capabilities.maxImageCount) {
+      swapChain->imageCount = swapChainSupport.capabilities.maxImageCount;
     }
     VkSwapchainCreateInfoKHR createInfo{};
     createInfo.sType   = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     createInfo.surface = surface;
 
-    createInfo.minImageCount    = swapChain.imageCount;
-    createInfo.imageFormat      = swapChain.surfaceFormat.format;
-    createInfo.imageColorSpace  = swapChain.surfaceFormat.colorSpace;
-    createInfo.imageExtent      = swapChain.extent;
+    createInfo.minImageCount    = swapChain->imageCount;
+    createInfo.imageFormat      = swapChain->surfaceFormat.format;
+    createInfo.imageColorSpace  = swapChain->surfaceFormat.colorSpace;
+    createInfo.imageExtent      = swapChain->extent;
     createInfo.imageArrayLayers = 1;
     createInfo.imageUsage       = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
     createInfo.preTransform   = swapChainSupport.capabilities.currentTransform;
     createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 
-    createInfo.presentMode  = swapChain.presentMode;
+    createInfo.presentMode  = swapChain->presentMode;
     createInfo.clipped      = VK_TRUE;
     createInfo.oldSwapchain = VK_NULL_HANDLE;
 
-    HARD_CHECK(vkCreateSwapchainKHR(device, &createInfo, nullptr, &swapChain.swapChain) == VK_SUCCESS, "Error creating swap chain\n");
+    HARD_CHECK(vkCreateSwapchainKHR(device, &createInfo, nullptr, &swapChain->swapChain) == VK_SUCCESS, "Error creating swap chain\n");
+    LOG("[VK] Swap chain created\n");
+
+    std::vector<VkImage> images;
+    uint32_t             imageCount;
+    vkGetSwapchainImagesKHR(device, swapChain->swapChain, &imageCount, nullptr);
+    swapChain->swapChainImages.resize(imageCount);
+    images.resize(imageCount);
+    vkGetSwapchainImagesKHR(device, swapChain->swapChain, &imageCount, images.data());
+
+    for (int i = 0; i < images.size(); i++) {
+      swapChain->swapChainImages[i] = make_ptr<Image>(images[i], createInfo.imageFormat, device);
+      swapChain->swapChainImages[i]->getDefaultView();
+    }
     return swapChain;
   }
 
@@ -373,9 +507,13 @@ struct VKRenderer : public IRenderer {
     Device(DeviceDesc desc) { this->desc = desc; }
 
     ~Device() {
+      if (swapChain)
+        delete swapChain;
       vkDestroyDevice(device, nullptr);
       LOG("[VK] Device destroyed\n");
     }
+
+    std::vector<const char*> deviceExtensions;
 
     std::vector<VkQueue> graphicQueues;
     std::vector<VkQueue> transferQueues;
@@ -383,11 +521,11 @@ struct VKRenderer : public IRenderer {
     VkQueue              presentQueue;
 
     SwapChainSupportDetails swapChainSupport;
-    SwapChain               swapChain;
+    SwapChain*              swapChain = nullptr;
 
     VkDevice    device;
     DeviceDesc  desc;
-    VKRenderer* renderer;
+    VKRenderer* renderer = nullptr;
   };
 
   Device* deviceCreate(VkPhysicalDevice physicalDevice, DeviceDesc desc) {
@@ -458,8 +596,7 @@ struct VKRenderer : public IRenderer {
 
     // FEATURES
     VkPhysicalDeviceFeatures deviceFeatures{};
-    createInfo.pEnabledFeatures      = &deviceFeatures;
-    createInfo.enabledExtensionCount = 0;
+    createInfo.pEnabledFeatures = &deviceFeatures;
 
     if (enableValidationLayers) {
       createInfo.enabledLayerCount   = desc.requestedValidationLayers.size();
@@ -468,7 +605,23 @@ struct VKRenderer : public IRenderer {
       createInfo.enabledLayerCount = 0;
     }
 
+    if (this->_desc.surface->isOnline()) {
+      LOG("[VK] Requesting swap chain extension support");
+      device->deviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+    }
+
+    createInfo.enabledExtensionCount   = device->deviceExtensions.size();
+    createInfo.ppEnabledExtensionNames = device->deviceExtensions.data();
+
     VkDevice deviceHandle;
+
+    if (isDebugBuild) {
+      LOG("[VK] Requested extensions:\n");
+      for (int i = 0; i < device->deviceExtensions.size(); i++) {
+        LOG("[VK] -- %d %s\n", i, device->deviceExtensions[i]);
+      }
+    }
+
     HARD_CHECK(vkCreateDevice(physicalDevice, &createInfo, nullptr, &deviceHandle) == VK_SUCCESS, "[VK] Error creating device");
 
     if (indices.hasGraphicsFamily) {
@@ -529,6 +682,7 @@ struct VKRenderer : public IRenderer {
   };
 
   Surface* surfaceCreate() {
+    LOG("[VK] Creating surface\n");
     return new GLFWSurface(this);
   }
 
@@ -539,8 +693,10 @@ struct VKRenderer : public IRenderer {
     DeviceDesc device_desc;
     device_desc.requestedValidationLayers = validationLayers;
 
-    mMainSurface = surfaceCreate();
-    mMainDevice  = deviceCreate(pickPhysicalDevice(), device_desc);
+    if (desc.surface->isOnline()) {
+      mMainSurface = surfaceCreate();
+    }
+    mMainDevice = deviceCreate(pickPhysicalDevice(), device_desc);
   }
 
   ~VKRenderer() {

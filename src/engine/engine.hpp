@@ -227,6 +227,9 @@ struct ISurface {
   virtual inline bool  resized() const   = 0;
   virtual inline float ra() const { return getWidth() / float(getHeight()); }
 
+  inline SurfaceDesc& getDesc() { return desc; }
+  inline bool         isOnline() { return desc.online; }
+
   protected:
   SurfaceDesc desc;
 };
