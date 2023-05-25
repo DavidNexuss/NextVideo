@@ -1,32 +1,12 @@
 #include <glm/glm.hpp>
+#include <string>
 
-/* STD CONTAINERS */
-#include <vector>
-#include <unordered_map>
-
-#define ENGINE_API
 #define DEBUG
+/* STD CONTAINERS */
+#include "core.hpp"
 
-#define SAFETY(X) \
-  do { X; } while (0);
-#ifdef DEBUG
-#  include <stdio.h>
-#  define ERROR(...) dprintf(2, __VA_ARGS__)
-#  define LOG(...)   dprintf(2, __VA_ARGS__)
-#  define VERIFY(X, ...)                                             \
-    if (!(X)) {                                                      \
-      dprintf(2, "%d [ASSERT] ### Assert error " #X ": ", __LINE__); \
-      dprintf(2, __VA_ARGS__);                                       \
-      fflush(stderr);                                                \
-      exit(1);                                                       \
-    }
-
-#else
-#  define ERROR(...)
-#  define LOG(...)
-#  define VERIFY(X, ...)
-#endif
-
+/* USER API INTERFACE */
+namespace NextVideo {
 
 template <typename T>
 bool valid(const std::vector<T>& container, int index) { return index >= 0 && index < container.size(); }
@@ -52,15 +32,13 @@ struct idx_ptr {
   int             index;
   std::vector<T>* container;
 };
-/* USER API INTERFACE */
-namespace GLEngine {
 
 struct Texture {
   int   width;
   int   height;
   int   channels;
   bool  useNearest;
-  bool  useMipmapping;
+  bool  mipmapDisable;
   void* data;
 };
 
@@ -73,6 +51,11 @@ static int MESH_FORMAT_POSITION_NORMAL_UV = 0;
 static int MESH_FORMAT_LAST               = 1;
 
 enum MeshType { CUSTOM };
+
+struct Program {
+  std::string vertexShader;
+  std::string fragmentShader;
+};
 
 struct Material {
   //PBR PIPELINE
@@ -96,6 +79,9 @@ struct Material {
   float     shinness;
 
   int specularTexture;
+
+  glm::vec2 uvScale  = glm::vec2(1.0f);
+  glm::vec2 uvOffset = glm::vec2(0.0f);
 };
 
 struct Mesh {
@@ -109,6 +95,9 @@ struct Mesh {
   } tCustom;
 
   MeshType type;
+
+  bool program_special;
+  int  program;
 };
 
 struct Object {
@@ -123,9 +112,27 @@ struct ObjectInstanceGroup {
   std::vector<glm::mat4> transforms;
 };
 
+enum LightType {
+  POINT,
+  DIRECTIONAL,
+  HEMI
+};
+
+struct Light {
+  glm::vec3 direction;
+  glm::vec3 position;
+  float     radius;
+  LightType type;
+};
+struct SunLight {
+};
 struct Stage {
   std::vector<Object>              objects;
   std::vector<ObjectInstanceGroup> instances;
+  std::vector<Light>               lights;
+  std::vector<Program>             programs;
+
+  SunLight sunLight;
 
   int       skyTexture;
   glm::vec3 camPos;
@@ -189,29 +196,66 @@ struct Scene {
   void setCurrentStage(int index) { _currentStage = index; }
 };
 
-typedef struct _ {
-  int   width           = 640;
-  int   height          = 480;
-  int   deferred_enable = 0;
-  int   hdr_enable      = 0;
-  float bloom_radius    = 1.5f;
-  int   bloom_sampling  = 2;
-  bool  bloom_enable    = 0;
-} RendererDesc;
 
-
-struct RendererInput {
+struct SurfaceInput {
   int*  keyboard;
   float x;
   float y;
 };
 
+struct SurfaceExtensions {
+  const char** names;
+  unsigned int count;
+};
+
+struct SurfaceDesc {
+  int  width  = 800;
+  int  height = 600;
+  bool online = true;
+};
+
+struct ISurface {
+  virtual void*             native()        = 0;
+  virtual SurfaceExtensions getExtensions() = 0;
+  virtual SurfaceInput      getInput()      = 0;
+  virtual int               update()        = 0;
+  virtual ~ISurface() {}
+
+
+  virtual inline int   getWidth() const  = 0;
+  virtual inline int   getHeight() const = 0;
+  virtual inline bool  resized() const   = 0;
+  virtual inline float ra() const { return getWidth() / float(getHeight()); }
+
+  protected:
+  SurfaceDesc desc;
+};
+
+
+typedef struct _RendererDesc {
+
+  // The renderer implementation may or may not obey this flags
+  int       deferred_enable         = 0;
+  int       hdr_enable              = 0;
+  float     bloom_radius            = 1.5f;
+  int       bloom_sampling          = 2;
+  bool      bloom_enable            = 0;
+  bool      shadowmapping_enable    = 0;
+  int       shadowmapping_width     = 1024;
+  int       shadowmapping_height    = 1024;
+  bool      ssao_enable             = 0;
+  bool      parallaxmapping_enable  = 0;
+  bool      texture_mipmap_enable   = 1;
+  bool      depth_enable            = 1;
+  bool      backface_culling_enable = 1;
+  bool      cull_back_face          = 1;
+  ISurface* surface                 = nullptr;
+} RendererDesc;
+
 struct IRenderer {
-  virtual void          render(Scene* scene) = 0;
-  virtual void          upload(Scene* scene) = 0;
-  virtual int           pollEvents()         = 0;
-  virtual RendererInput input()              = 0;
-  ~IRenderer();
+  virtual void render(Scene* scene) = 0;
+  virtual void upload(Scene* scene) = 0;
+  virtual ~IRenderer() {}
 
   inline RendererDesc& desc() { return _desc; }
 
@@ -219,6 +263,12 @@ struct IRenderer {
   RendererDesc _desc;
 };
 
-ENGINE_API Scene*     sceneCreate();
-ENGINE_API IRenderer* rendererCreate(RendererDesc desc);
-} // namespace GLEngine
+struct RendererBackendDefaults {
+  bool glfw_noApi = false;
+};
+
+ENGINE_API RendererBackendDefaults rendererDefaults();
+ENGINE_API Scene*                  sceneCreate();
+ENGINE_API IRenderer*              rendererCreate(RendererDesc desc);
+ENGINE_API ISurface*               surfaceCreate(SurfaceDesc desc);
+} // namespace NextVideo
