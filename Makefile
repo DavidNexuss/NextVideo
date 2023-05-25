@@ -1,4 +1,4 @@
-CFLAGS= -g -I src -I libDist/assimp/include -I libDist/glfw/include -I libDist/glew-2.2.0/include
+CFLAGS= -g -I src -I libDist/assimp/include -I libDist/glfw/include -I libDist/glew-2.2.0/include -I lib/glm
 LDFLAGS= -lGLEW -lGL -lz
 LDFLAGSVK = -lglfw -lvulkan -ldl -lpthread -lX11 -lXxf86vm -lXrandr -lXi -lassimp -lGLEW -lGL -lz
 
