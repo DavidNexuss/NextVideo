@@ -93,8 +93,65 @@ struct VKRenderer : public IRenderer {
     SHADER_STAGES_COUNT
   };
 
+
+  struct VertexAttribute {
+    int size;
+  };
+
   struct PipelineDesc {
-    IO::buffer shaders[5];
+    IO::buffer                   shaders[5];
+    std::vector<VertexAttribute> vertexAttribs;
+    int                          attachmentCount;
+
+    // desc
+    VkPipelineInputAssemblyStateCreateInfo inputAssembly_ci = trianglesAssembly();
+    VkPipelineRasterizationStateCreateInfo rasterizer_ci    = fill();
+    VkPipelineMultisampleStateCreateInfo   multisample_ci   = msaa();
+    VkPipelineColorBlendAttachmentState    colorBlend[4];
+
+    static VkPipelineMultisampleStateCreateInfo msaa() {
+
+      VkPipelineMultisampleStateCreateInfo multisampling{};
+      multisampling.sType                 = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+      multisampling.sampleShadingEnable   = VK_FALSE;
+      multisampling.rasterizationSamples  = VK_SAMPLE_COUNT_1_BIT;
+      multisampling.minSampleShading      = 1.0f;
+      multisampling.pSampleMask           = nullptr;
+      multisampling.alphaToCoverageEnable = VK_FALSE;
+      multisampling.alphaToOneEnable      = VK_FALSE;
+      return multisampling;
+    }
+    static VkPipelineRasterizationStateCreateInfo fill() {
+      VkPipelineRasterizationStateCreateInfo rasterizer{};
+      rasterizer.sType                   = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+      rasterizer.depthClampEnable        = VK_FALSE;
+      rasterizer.rasterizerDiscardEnable = VK_FALSE;
+      rasterizer.rasterizerDiscardEnable = VK_FALSE;
+      rasterizer.lineWidth               = 1.0f;
+      rasterizer.cullMode                = VK_CULL_MODE_BACK_BIT;
+      rasterizer.frontFace               = VK_FRONT_FACE_CLOCKWISE;
+      rasterizer.depthBiasEnable         = VK_FALSE;
+      //Optional
+      rasterizer.depthBiasConstantFactor = 0.0f;
+      rasterizer.depthBiasClamp          = 0.0f;
+      rasterizer.depthBiasSlopeFactor    = 0.0f;
+      return rasterizer;
+    }
+    static VkPipelineInputAssemblyStateCreateInfo trianglesAssembly() {
+
+      VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+      inputAssembly.sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+      inputAssembly.topology               = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+      inputAssembly.primitiveRestartEnable = VK_FALSE;
+      return inputAssembly;
+    }
+    VkPipelineColorBlendStateCreateInfo colorBlending_ci() {
+    }
+  };
+
+  struct PipelineDynamicState {
+    VkViewport viewport{};
+    VkRect2D   scissor{};
   };
 
   struct Pipeline {
@@ -125,14 +182,45 @@ struct VKRenderer : public IRenderer {
     VkShaderModule                  shaderModules[SHADER_STAGES_COUNT];
     VkPipelineShaderStageCreateInfo shaderStages_ci[SHADER_STAGES_COUNT];
 
+
+    static VkShaderStageFlagBits flags[] = {
+      VK_SHADER_STAGE_VERTEX_BIT,
+      VK_SHADER_STAGE_FRAGMENT_BIT};
     int baseIdx = 0;
+
     for (int i = 0; i < SHADER_STAGES_COUNT; i++) {
       if ((shaderModules[i] = shaderModuleCreate(desc.shaders[i], device)) != VK_NULL_HANDLE) {
         presentShaders[i] = true;
+        VkPipelineShaderStageCreateInfo shaderStageInfo{};
+        shaderStageInfo.sType      = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        shaderStageInfo.stage      = flags[i];
+        shaderStageInfo.module     = shaderModules[i];
+        shaderStageInfo.pName      = "main";
+        shaderStages_ci[baseIdx++] = shaderStageInfo;
       };
     }
+    VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+    vertexInputInfo.sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertexInputInfo.vertexBindingDescriptionCount   = 0;
+    vertexInputInfo.pVertexBindingDescriptions      = nullptr;
+    vertexInputInfo.vertexAttributeDescriptionCount = 0;
+    vertexInputInfo.pVertexAttributeDescriptions    = nullptr;
 
+    const static VkDynamicState dynamicStates[] = {
+      VK_DYNAMIC_STATE_VIEWPORT,
+      VK_DYNAMIC_STATE_SCISSOR};
 
+    VkPipelineDynamicStateCreateInfo dynamicState{};
+    dynamicState.sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamicState.dynamicStateCount = sizeof(dynamicStates) / sizeof(VkDynamicState);
+    dynamicState.pDynamicStates    = dynamicStates;
+
+    VkPipelineViewportStateCreateInfo viewportState{};
+    viewportState.sType         = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewportState.viewportCount = 1;
+    viewportState.scissorCount  = 1;
+
+    VkPipelineRasterizationStateCreateInfo rasterizer{};
 
     return pip;
   }
