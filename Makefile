@@ -1,9 +1,9 @@
-CFLAGS= -g -I src
+CFLAGS= -g -I src -I libDist/assimp/include -I libDist/glfw/include -I libDist/glew-2.2.0/include
 LDFLAGS= -lGLEW -lGL -lz
 LDFLAGSVK = -lglfw -lvulkan -ldl -lpthread -lX11 -lXxf86vm -lXrandr -lXi -lassimp -lGLEW -lGL -lz
 
 all: bin/testGL bin/testVK
-LIBS= libDist/glfw/src/libglfw3.a libDist/assimp/lib/libassimp.a
+LIBS= libDist/glfw/src/libglfw3.a libDist/assimp/lib/libassimp.a libDist/glew-2.2.0/lib/libGLEW.a
 
 obj/gl.o: src/engine/gl.cpp src/engine/engine.hpp
 	g++ $(CFLAGS) src/engine/gl.cpp -c -o $@
@@ -35,6 +35,14 @@ libDist/glfw/src/libglfw3.a: libDist/glfw
 libDist/assimp/lib/libassimp.a: libDist/assimp
 	cd libDist/assimp; make -j4
 
+libDist/glew-2.2.0:
+	unzip lib/glew.zip -d libDist
+
+libDist/glew-2.2.0/lib/libGLEW.a: libDist/glew-2.2.0
+	cd libDist/glew-2.2.0; make -j4
+
 glfw: libDist/glfw/src/libglfw3.a
 
 assimp: libDist/assimp/lib/libassimp.a
+
+glew: libDist/glew-2.2.0/lib/libGLEW.a
