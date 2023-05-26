@@ -22,12 +22,17 @@ namespace NextVideo {
 static const char* engineName      = "No engine";
 static const char* applicationName = "Test application";
 
+ENGINE_API const char* readFile(const char* path);
+
+static VkFormat gDefaultWriteFormat;
+static VkFormat gDefaultDepthWriteFormat;
+
 struct VKRenderer : public IRenderer {
 
   struct IO {
     struct buffer {
-      char* data;
-      int   count;
+      char*         data;
+      unsigned long count;
     };
   };
 
@@ -39,6 +44,11 @@ struct VKRenderer : public IRenderer {
   template <typename T, typename... Args>
   ptr<T> make_ptr(Args&&... args) { return std::make_unique<T>(std::forward<Args>(args)...); }
 
+  ENGINE_API IO::buffer IO_readFile(const char* path) {
+    const char* data = readFile(path);
+    VERIFY(data != nullptr, "[IO] Error reading data\n");
+    return {(char*)data, strlen(data)};
+  }
 
   /* VK Util */
 
@@ -98,16 +108,98 @@ struct VKRenderer : public IRenderer {
     int size;
   };
 
+
+  static VkAttachmentDescription colorAttachmentSwapChain() {
+    VkAttachmentDescription colorAttachment{};
+    colorAttachment.format  = gSwapChainFormatColor;
+    colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+
+    colorAttachment.loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+
+    colorAttachment.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+
+    colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    colorAttachment.finalLayout   = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+    return {colorAttachment};
+  }
+
+  static VkAttachmentDescription depthAttachmentSwapChain() {}
+
+
+  struct SubpassDescReference {
+    int           index;
+    VkImageLayout layout;
+  };
+  struct SubpassDesc {
+    std::vector<SubpassDescReference> colorIndices;
+    int                               depth;
+  };
+
+  struct Subpass {
+    std::vector<std::vector<VkAttachmentReference>> references;
+    std::vector<VkSubpassDescription>               subpasses;
+
+    Subpass(int size) {
+      subpasses.resize(size);
+      references.resize(size);
+    }
+  };
+
+  static SubpassDesc defaultSubpass() { return {{{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL}}, 0}; }
+
+
+  struct RenderPassDesc {
+    std::vector<VkAttachmentDescription> colorAttachments = {colorAttachmentSwapChain()};
+    VkAttachmentDescription              depthAttachment  = depthAttachmentSwapChain();
+    std::vector<SubpassDesc>             subpasses        = {defaultSubpass()};
+
+
+    Subpass getSubpasses() {
+      Subpass result(subpasses.size());
+      for (int i = 0; i < subpasses.size(); i++) {
+        for (int j = 0; j < subpasses[i].colorIndices.size(); j++) {
+          VkAttachmentReference reference;
+          reference.attachment = subpasses[i].colorIndices[j].index;
+          reference.layout     = subpasses[i].colorIndices[j].layout;
+          result.references[i].push_back(reference);
+        }
+
+        VkSubpassDescription subpass{};
+        subpass.pipelineBindPoint    = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        subpass.colorAttachmentCount = subpasses[i].colorIndices.size();
+        subpass.pColorAttachments    = result.references[i].data();
+
+        result.subpasses.push_back(subpass);
+      }
+      return result;
+    }
+  };
+
+  struct RenderPass {
+    VkRenderPass renderPass;
+
+    RenderPass(RenderPassDesc _desc) { this->desc = _desc; }
+    RenderPassDesc desc;
+  };
+
+  struct PipelineLayout {
+    VkPipelineLayout layout;
+  };
+
   struct PipelineDesc {
     IO::buffer                   shaders[5];
     std::vector<VertexAttribute> vertexAttribs;
-    int                          attachmentCount;
+    RenderPass*                  renderPass = nullptr;
+    PipelineLayout*              layout     = nullptr;
 
     // desc
     VkPipelineInputAssemblyStateCreateInfo inputAssembly_ci = trianglesAssembly();
     VkPipelineRasterizationStateCreateInfo rasterizer_ci    = fill();
     VkPipelineMultisampleStateCreateInfo   multisample_ci   = msaa();
-    VkPipelineColorBlendAttachmentState    colorBlend[4];
+    VkPipelineColorBlendAttachmentState    colorBlend[4]    = {colorBlendingDefault()};
 
     static VkPipelineMultisampleStateCreateInfo msaa() {
 
@@ -146,8 +238,64 @@ struct VKRenderer : public IRenderer {
       return inputAssembly;
     }
     VkPipelineColorBlendStateCreateInfo colorBlending_ci() {
+
+      VkPipelineColorBlendStateCreateInfo colorBlending{};
+      colorBlending.sType             = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+      colorBlending.logicOpEnable     = VK_FALSE;
+      colorBlending.logicOp           = VK_LOGIC_OP_COPY; // Optional
+      colorBlending.attachmentCount   = 1;
+      colorBlending.pAttachments      = colorBlend;
+      colorBlending.blendConstants[0] = 0.0f; // Optional
+      colorBlending.blendConstants[1] = 0.0f; // Optional
+      colorBlending.blendConstants[2] = 0.0f; // Optional
+      colorBlending.blendConstants[3] = 0.0f; // Optional
+      return colorBlending;
+    }
+
+    static VkPipelineColorBlendAttachmentState colorBlendingDefault() {
+      VkPipelineColorBlendAttachmentState colorBlendAttachment;
+      colorBlendAttachment.blendEnable         = VK_TRUE;
+      colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+      colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+      colorBlendAttachment.colorBlendOp        = VK_BLEND_OP_ADD;
+      colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+      colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+      colorBlendAttachment.alphaBlendOp        = VK_BLEND_OP_ADD;
+      return colorBlendAttachment;
     }
   };
+
+  PipelineLayout* pipelineLayoutCreate(VkDevice device) {
+
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+    pipelineLayoutInfo.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutInfo.setLayoutCount         = 0;       // Optional
+    pipelineLayoutInfo.pSetLayouts            = nullptr; // Optional
+    pipelineLayoutInfo.pushConstantRangeCount = 0;       // Optional
+    pipelineLayoutInfo.pPushConstantRanges    = nullptr; // Optional
+
+    VkPipelineLayout pipelineLayout;
+    HARD_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) == VK_SUCCESS, "Error creating pipeline layout");
+    LOG("[VK] Layout created\n");
+    return new PipelineLayout{pipelineLayout};
+  }
+
+  RenderPass* renderPassCreate(RenderPassDesc desc, VkDevice device) {
+    RenderPass* renderPass = new RenderPass(desc);
+
+    VkRenderPassCreateInfo renderPassInfo{};
+    renderPassInfo.sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    renderPassInfo.attachmentCount = desc.colorAttachments.size();
+    renderPassInfo.pAttachments    = desc.colorAttachments.data();
+
+    Subpass subpasses           = desc.getSubpasses();
+    renderPassInfo.subpassCount = subpasses.subpasses.size();
+    renderPassInfo.pSubpasses   = subpasses.subpasses.data();
+
+    HARD_CHECK(vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass->renderPass) == VK_SUCCESS, "Could not create render pass!\n");
+    LOG("[VK] Render pass created\n");
+    return renderPass;
+  }
 
   struct PipelineDynamicState {
     VkViewport viewport{};
@@ -159,7 +307,9 @@ struct VKRenderer : public IRenderer {
     VkDevice   owner;
 
     Pipeline(PipelineDesc desc) { this->desc = desc; }
-    ~Pipeline() {}
+    ~Pipeline() {
+      vkDestroyPipeline(owner, pipeline, nullptr);
+    }
 
     PipelineDesc desc;
   };
@@ -177,6 +327,9 @@ struct VKRenderer : public IRenderer {
 
   Pipeline* pipelineCreate(PipelineDesc desc, VkDevice device) {
     Pipeline* pip = new Pipeline(desc);
+
+    VERIFY(desc.renderPass != nullptr, "[VK] Error creating pipeline, invalid renderPass\n");
+    VERIFY(desc.layout != nullptr, "[VK] Error creating pipeline, invalid layout\n");
 
     bool                            presentShaders[SHADER_STAGES_COUNT];
     VkShaderModule                  shaderModules[SHADER_STAGES_COUNT];
@@ -222,6 +375,35 @@ struct VKRenderer : public IRenderer {
 
     VkPipelineRasterizationStateCreateInfo rasterizer{};
 
+    VkGraphicsPipelineCreateInfo pipelineInfo{};
+    pipelineInfo.sType      = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipelineInfo.stageCount = baseIdx;
+    pipelineInfo.pStages    = shaderStages_ci;
+
+
+    VkPipelineColorBlendStateCreateInfo colorBlending = desc.colorBlending_ci();
+    pipelineInfo.pVertexInputState                    = &vertexInputInfo;
+    pipelineInfo.pInputAssemblyState                  = &desc.inputAssembly_ci;
+    pipelineInfo.pViewportState                       = &viewportState;
+    pipelineInfo.pRasterizationState                  = &rasterizer;
+    pipelineInfo.pMultisampleState                    = &desc.multisample_ci;
+    pipelineInfo.pDepthStencilState                   = nullptr; // Optional
+    pipelineInfo.pColorBlendState                     = &colorBlending;
+    pipelineInfo.pDynamicState                        = &dynamicState;
+
+    pipelineInfo.layout     = desc.layout->layout;
+    pipelineInfo.renderPass = desc.renderPass->renderPass;
+    pipelineInfo.subpass    = 0;
+
+    pipelineInfo.basePipelineHandle = VK_NULL_HANDLE; // Optional
+    pipelineInfo.basePipelineIndex  = -1;             // Optional
+                                                      //
+
+    VkPipeline graphicsPipeline;
+    HARD_CHECK(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) == VK_SUCCESS, "Could not create pipeline\n");
+    LOG("[VK] Pipeline created\n");
+    pip->pipeline = graphicsPipeline;
+    pip->owner    = device;
     return pip;
   }
 
@@ -785,6 +967,15 @@ struct VKRenderer : public IRenderer {
       mMainSurface = surfaceCreate();
     }
     mMainDevice = deviceCreate(pickPhysicalDevice(), device_desc);
+
+    PipelineDesc pip_ci;
+    pip_ci.shaders[FRAGMENT] = IO_readFile("assets/shaders/shader.frag.spv");
+    pip_ci.shaders[VERTEX]   = IO_readFile("assets/shaders/shader.vert.spv");
+
+    pip_ci.layout     = pipelineLayoutCreate(mMainDevice->device);
+    pip_ci.renderPass = renderPassCreate(RenderPassDesc{}, mMainDevice->device);
+
+    mPipeline = pipelineCreate(pip_ci, mMainDevice->device);
   }
 
   ~VKRenderer() {
@@ -799,6 +990,7 @@ struct VKRenderer : public IRenderer {
   private:
   Surface*               mMainSurface = nullptr;
   Device*                mMainDevice  = nullptr;
+  Pipeline*              mPipeline    = nullptr;
   VkInstance             mInstance;
   VkAllocationCallbacks* mAllocator = nullptr;
 };

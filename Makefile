@@ -8,6 +8,9 @@ LIBS= libDist/glfw/src/libglfw3.a libDist/assimp/lib/libassimp.a libDist/glew-2.
 obj/gl.o: src/engine/gl.cpp src/engine/engine.hpp
 	g++ $(CFLAGS) src/engine/gl.cpp -c -o $@
 
+obj/util.o: src/engine/util.cpp src/engine/engine.hpp
+	g++ $(CFLAGS) src/engine/util.cpp -c -o $@
+
 obj/vk.o: src/engine/vk.cpp src/engine/engine.hpp
 	g++ $(CFLAGS) src/engine/vk.cpp -c -o $@
 
@@ -17,10 +20,10 @@ obj/glfwSurface.o: src/engine/glfwSurface.cpp src/engine/engine.hpp
 obj/scene.o: src/engine/scene.cpp src/engine/engine.hpp
 	g++ $(CFLAGS) src/engine/scene.cpp -c -o $@
 
-bin/testGL: obj/glfwSurface.o obj/gl.o obj/scene.o src/tests/test.cpp $(LIBS)
+bin/testGL: obj/glfwSurface.o obj/gl.o obj/scene.o obj/util.o src/tests/test.cpp $(LIBS)
 	g++ $(CFLAGS) $(LDFLAGS) $^ -o $@
 
-bin/testVK: obj/glfwSurface.o obj/vk.o obj/scene.o src/tests/test.cpp $(LIBS)
+bin/testVK: obj/glfwSurface.o obj/vk.o obj/scene.o obj/util.o src/tests/test.cpp $(LIBS)
 	g++ $(CFLAGS) $(LDFLAGSVK) $^ -o $@
 
 libDist/assimp: lib/assimp/CMakeLists.txt
