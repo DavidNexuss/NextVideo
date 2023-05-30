@@ -13,9 +13,7 @@
 #include <glm/ext.hpp>
 #include <stdio.h>
 #define MAX_OBJECTS 512
-#include <GL/glew.h>
-// Include
-#include <GL/gl.h>
+#include "gl.hpp"
 
 namespace NextVideo {
 ENGINE_API const char* readFile(const char* path);
@@ -86,7 +84,7 @@ ENGINE_API GLuint glUtilLoadProgram(const char* vs, const char* fs) {
 
   if (InfoLogLength > 0) {
     glGetShaderInfoLog(VertexShaderID, InfoLogLength, NULL, errorBuffer);
-    ERROR("Error loading vertex shader %s : \n%s\n", vs, errorBuffer);
+    ERROR("Error loading vertex shader Source : %s : \nError : %s\n", vs, errorBuffer);
     free((void*)VertexSourcePointer);
     free((void*)FragmentSourcePointer);
     return 0;
@@ -118,6 +116,7 @@ ENGINE_API GLuint glUtilLoadProgram(const char* vs, const char* fs) {
 
   if (InfoLogLength > 0) {
     glGetProgramInfoLog(ProgramID, InfoLogLength, NULL, errorBuffer);
+    ERROR("Error compiling program %s : \n%s\n", fs, errorBuffer);
     free((void*)VertexSourcePointer);
     free((void*)FragmentSourcePointer);
     return 0;

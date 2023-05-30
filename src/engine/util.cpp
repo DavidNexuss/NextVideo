@@ -1,10 +1,22 @@
 #include "engine.hpp"
-
+#include <fstream>
 namespace NextVideo {
 
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <unistd.h>
+#ifdef __EMSCRIPTEN__
+
+ENGINE_API const char* readFile(const char* path) {
+
+  std::ifstream file(path);
+  std::string   content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+
+  char* data = new char[content.size() + 1];
+  for (int i = 0; i < content.size(); i++) data[i] = content[i];
+  return data;
+}
+#else
+#  include <fcntl.h>
+#  include <sys/stat.h>
+#  include <unistd.h>
 ENGINE_API const char* readFile(const char* path) {
   struct stat _stat;
   stat(path, &_stat);
@@ -30,4 +42,5 @@ ENGINE_API const char* readFile(const char* path) {
 
   return buffer;
 }
+#endif
 } // namespace NextVideo

@@ -1,10 +1,9 @@
 
-#include <GL/glew.h>
-// Include
-#include <GL/gl.h>
+#include "gl.hpp"
 #include "engine.hpp"
 #include <GLFW/glfw3.h>
-
+#include "../include/imgui_impl_glfw.h"
+#include "../include/imgui_impl_opengl3.h"
 
 namespace NextVideo {
 struct Window {
@@ -16,6 +15,7 @@ struct Window {
   float y;
   float ra;
   int   keyboard[512];
+  float scroll;
 };
 
 /* GLFW CALLBACKS */
@@ -44,7 +44,10 @@ ENGINE_API void cursor_position_callback(GLFWwindow* window, double x, double y)
   ptr->x *= 2;
   ptr->y *= 2;
 }
-ENGINE_API void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {}
+ENGINE_API void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
+  auto* ptr = (Window*)glfwGetWindowUserPointer(window);
+  ptr->scroll += yoffset;
+}
 ENGINE_API void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
   auto* ptr          = (Window*)glfwGetWindowUserPointer(window);
   ptr->keyboard[key] = (action == GLFW_PRESS) || (action == GLFW_REPEAT);
@@ -53,6 +56,19 @@ struct GLFWSurface : public ISurface {
 
   Window* window;
 
+  bool initializeDearImGui(GLFWwindow* wind) {
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+
+    ImGuiIO& io = ImGui::GetIO();
+    (void)io;
+
+    // setup platform/renderer bindings
+    if (!ImGui_ImplGlfw_InitForOpenGL(wind, true)) { return false; }
+    if (!ImGui_ImplOpenGL3_Init()) { return false; }
+
+    return true;
+  }
 
   ENGINE_API Window* windowCreate(int width, int height) {
 
@@ -78,12 +94,17 @@ struct GLFWSurface : public ISurface {
     }
 
     glfwMakeContextCurrent(window);
+
+#ifdef __EMSCRIPTEN__
+#else
+
     if (!defaults.glfw_noApi) {
       if (glewInit() != GLEW_OK) {
         ERROR("Failed to initialize glew");
         return 0;
       }
     }
+#endif
 
     glfwSetInputMode(window, GLFW_STICKY_KEYS, GL_TRUE);
     glfwSetWindowSizeCallback(window, window_size_callback);
@@ -94,6 +115,7 @@ struct GLFWSurface : public ISurface {
 
     LOG("Window created with %d %d\n", width, height);
 
+    initializeDearImGui(window);
     Window* windowInstance      = new Window;
     windowInstance->windowPtr   = window;
     windowInstance->needsUpdate = true;
@@ -136,6 +158,19 @@ struct GLFWSurface : public ISurface {
   ~GLFWSurface() { this->windowDestroy(this->window); }
 
   void* native() override { return window->windowPtr; }
+
+  void beginUI() override {
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+
+    ImGui::NewFrame();
+  }
+
+  void endUI() override {
+    ImGui::EndFrame();
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+  }
 };
 
 

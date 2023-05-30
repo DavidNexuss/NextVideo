@@ -1,3 +1,4 @@
+#pragma once
 #include <glm/glm.hpp>
 #include <string>
 
@@ -201,6 +202,8 @@ struct SurfaceInput {
   int*  keyboard;
   float x;
   float y;
+  bool  isMousePressed;
+  float scroll;
 };
 
 struct SurfaceExtensions {
@@ -219,6 +222,8 @@ struct ISurface {
   virtual SurfaceExtensions getExtensions() = 0;
   virtual SurfaceInput      getInput()      = 0;
   virtual int               update()        = 0;
+  virtual void              beginUI()       = 0;
+  virtual void              endUI()         = 0;
   virtual ~ISurface() {}
 
 

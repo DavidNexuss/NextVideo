@@ -1,8 +1,6 @@
 #include "../engine/engine.hpp"
 #include "../engine/linear.hpp"
 
-
-
 using namespace NextVideo;
 void initScene(Scene* scene) {
   scene->addTexture("assets/equi2.png");
