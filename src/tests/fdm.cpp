@@ -11,11 +11,11 @@ using namespace NextVideo;
 #define A_WAVE            5000e-10
 #define A_SEPARATION      0.01e-3
 #define A_L               = 200.0e-3
-#define N                 20
 #define ZOOM              1e-4
 #define TIME_ZOOM         (1e-6 / C)
 
-
+int NCOUNT = 5;
+#define N NCOUNT
 bool  LIGHT_DECAY_ENABLED  = false;
 float LIGHT_DECAY_EXPONENT = 0.00002;
 float plotting_distance    = 500e-3;
@@ -45,6 +45,7 @@ float light(vec2 st, float t) {
 
 float net(vec2 st, float off, float t, float separation) {
   float result = 0.0;
+  separation   = 10.0 * separation / float(N);
   float offset = -float(N) * separation * 0.5 + off;
   for (int i = 0; i < N; i++) {
     result += light(st + vec2(0, offset), t);
@@ -123,8 +124,11 @@ GLuint iIntegrationMode;
 GLuint iDecayMode;
 GLuint iDecayExponent;
 GLuint iExperimentSelector;
+GLuint iDistance;
+GLuint iN;
 
 // Uniforms
+float uDistance   = 0.0;
 float uZoom       = 1.0;
 float uTime       = 0.0;
 int   uExperiment = 0;
@@ -146,7 +150,10 @@ void init() {
   iResolution         = glGetUniformLocation(program, "iResolution");
   iIntegrationMode    = glGetUniformLocation(program, "iIntegrationMode");
   iDecayMode          = glGetUniformLocation(program, "iDecayMode");
+  iDecayExponent      = glGetUniformLocation(program, "iDecayExponent");
   iExperimentSelector = glGetUniformLocation(program, "iExperimentSelector");
+  iN                  = glGetUniformLocation(program, "N");
+  iDistance           = glGetUniformLocation(program, "iDistance");
 }
 
 NextVideo::ISurface* surface;
@@ -164,6 +171,8 @@ void uiRender() {
     ImGui::SliderFloat("Light decay exponent", &LIGHT_DECAY_EXPONENT, 1.0, 10.0);
     ImGui::SliderFloat("Zoom", &uZoom, 0.01, 10.0);
     ImGui::SliderFloat("Time", &uTime, 0.01, 10.0);
+    ImGui::SliderInt("N", &NCOUNT, 2, 50);
+    ImGui::InputFloat("Distance", &uDistance);
     ImGui::End();
   }
 
@@ -203,7 +212,7 @@ void uiRender() {
         }
       }
 
-      if (ImPlot::BeginPlot("My Plot")) {
+      if (ImPlot::BeginPlot("My Plot", "Distancia en X", "Intensitat llum", ImVec2(1500, 600))) {
         ImPlot::PlotLine("Integration", data.x.data(), data.y.data(), data.x.size());
         ImPlot::EndPlot();
       }
@@ -218,8 +227,10 @@ void render() {
   glUniform2f(iResolution, surface->getWidth(), surface->getHeight());
   glUniform1i(iIntegrationMode, uIntegration);
   glUniform1i(iDecayMode, LIGHT_DECAY_ENABLED);
-  glUniform1i(iDecayExponent, LIGHT_DECAY_EXPONENT);
+  glUniform1f(iDecayExponent, LIGHT_DECAY_EXPONENT);
   glUniform1i(iExperimentSelector, uExperiment);
+  glUniform1f(iDistance, uDistance);
+  glUniform1i(iN, NCOUNT);
   glDrawArrays(GL_TRIANGLES, 0, 6);
 }
 

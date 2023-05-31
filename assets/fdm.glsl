@@ -5,6 +5,7 @@ out vec3 color;
 uniform vec2 iMouse;
 uniform float iTime;
 uniform float iZoom;
+uniform float iDistance;
 uniform vec2 iResolution;
 uniform mat4 iCameraTransform;
 
@@ -18,13 +19,13 @@ uniform mat4 iCameraTransform;
 #define A_WAVE 5000e-10
 #define A_SEPARATION 0.01e-3
 #define A_L = 200.0e-3
-#define N 20
+uniform int N;
 #define ZOOM 1e-4
 #define TIME_ZOOM (1e-6 / C)
 
 uniform bool iIntegrationMode;
 uniform bool iDecayMode;
-uniform bool iDecayExponent;
+uniform float iDecayExponent;
 uniform int iExperimentSelector;
 
 vec3 hsv2rgb(vec3 c) {
@@ -49,7 +50,8 @@ vec2 getSt() {
 }
 
 vec2 realSt() { 
-     vec2 st = (( gl_FragCoord.xy / iResolution.xy - 0.5)) * ZOOM * iZoom;
+     vec2 st = (( gl_FragCoord.xy / iResolution.xy - 0.5))
+      * ZOOM * iZoom;
      return st;
 }
 
@@ -57,11 +59,11 @@ vec2 realSt() {
 
 //Inverse square intensity falloff
 float lightValue(vec2 st) { 
-    return 0.00002 / sqrt(st.x * st.x + st.y * st.y);
+    return pow(10.0, -iDecayExponent) / sqrt(st.x * st.x + st.y * st.y);
 }
 //Ligth wave intensity value for a wave with frequency w
 float light(vec2 st, float t) { 
-    float l = length(vec3(st.x, st.y, 0));
+    float l = length(vec3(st.x, st.y, iDistance));
     float k = 2.0 * M_PI / LAMBDA;
 	  float f = C / LAMBDA;
 	  float w = f * 2.0 * M_PI;
@@ -119,6 +121,7 @@ float test4(vec2 st, float t)
 
 float net(vec2 st, float off, float t, float separation) { 
 	float result = 0.0;
+  separation = 10.0 * separation / float(N);
 	float offset = -float(N) * separation * 0.5 + off;
 	for(int i = 0; i < N; i++) { 
 		result += light(st + vec2(0,offset), t);
