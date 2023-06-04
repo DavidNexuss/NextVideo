@@ -23,8 +23,11 @@ uniform int N;
 #define ZOOM 1e-4
 #define TIME_ZOOM (1e-6 / C)
 
+uniform float iLambda;
 uniform bool iIntegrationMode;
 uniform bool iDecayMode;
+uniform bool iAmpladaFixa;
+uniform bool iNormalitzarXarxa;
 uniform float iDecayExponent;
 uniform int iExperimentSelector;
 
@@ -55,7 +58,7 @@ vec2 realSt() {
      return st;
 }
 
-#define LAMBDA 5000e-10
+#define LAMBDA iLambda
 
 //Inverse square intensity falloff
 float lightValue(vec2 st) { 
@@ -121,12 +124,15 @@ float test4(vec2 st, float t)
 
 float net(vec2 st, float off, float t, float separation) { 
 	float result = 0.0;
-  separation = 10.0 * separation / float(N);
+  if(iAmpladaFixa)
+    separation = 10.0 * separation / float(N);
 	float offset = -float(N) * separation * 0.5 + off;
 	for(int i = 0; i < N; i++) { 
 		result += light(st + vec2(0,offset), t);
 		offset += separation;
 	}
+  if(iNormalitzarXarxa)
+    return result / float(N);
 	return result / float(N);
 }
 
