@@ -2,8 +2,8 @@
 #include "gl.hpp"
 #include "engine.hpp"
 #include <GLFW/glfw3.h>
-#include "../include/imgui_impl_glfw.h"
-#include "../include/imgui_impl_opengl3.h"
+#include <imgui/backends/imgui_impl_glfw.h>
+#include <imgui/backends/imgui_impl_opengl3.h>
 
 namespace NextVideo {
 struct Window {

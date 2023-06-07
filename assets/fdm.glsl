@@ -136,7 +136,7 @@ float net(vec2 st, float off, float t, float separation) {
 	return result / float(N);
 }
 
-#define B_SEPARATION 0.001e-3
+#define B_SEPARATION 0.01e-3
 float testHouda(vec2 st, float t) { 
 	return net(st, 0.0,t, B_SEPARATION * 0.3) * 0.5 + net(st, B_SEPARATION * float(N) * 0.4,t, B_SEPARATION * 0.3) * 0.5;
 }

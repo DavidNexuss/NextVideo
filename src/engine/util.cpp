@@ -4,7 +4,7 @@ namespace NextVideo {
 
 #ifdef __EMSCRIPTEN__
 
-ENGINE_API const char* readFile(const char* path) {
+const char* readFile(const char* path) {
 
   std::ifstream file(path);
   std::string   content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
@@ -17,7 +17,7 @@ ENGINE_API const char* readFile(const char* path) {
 #  include <fcntl.h>
 #  include <sys/stat.h>
 #  include <unistd.h>
-ENGINE_API const char* readFile(const char* path) {
+const char* readFile(const char* path) {
   struct stat _stat;
   stat(path, &_stat);
 
