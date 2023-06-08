@@ -1,10 +1,33 @@
 #pragma once
 #include <glm/glm.hpp>
 #include <string>
+#include <vector>
 
 #define DEBUG
-/* STD CONTAINERS */
-#include "core.hpp"
+#define ENGINE_API
+
+#define SAFETY(X) \
+  do { X; } while (0);
+#ifdef DEBUG
+#  include <stdio.h>
+#  define ERROR(...) dprintf(2, __VA_ARGS__)
+#  define LOG(...)   dprintf(2, __VA_ARGS__)
+#  define VERIFY(X, ...)                                             \
+    if (!(X)) {                                                      \
+      dprintf(2, "%d [ASSERT] ### Assert error " #X ": ", __LINE__); \
+      dprintf(2, __VA_ARGS__);                                       \
+      fflush(stderr);                                                \
+      exit(1);                                                       \
+    }
+
+#  define HARD_CHECK(X, ...) VERIFY(X, __VA_ARGS__)
+#else
+#  define ERROR(...)
+#  define LOG(...)
+#  define VERIFY(X, ...)
+#  define HARD_CHECK(X, ...) \
+    do { X } while (0)
+#endif
 
 /* USER API INTERFACE */
 namespace NextVideo {
@@ -275,8 +298,26 @@ struct RendererBackendDefaults {
   bool glfw_noApi = false;
 };
 
-ENGINE_API RendererBackendDefaults rendererDefaults();
-ENGINE_API Scene*                  sceneCreate();
-ENGINE_API IRenderer*              rendererCreate(RendererDesc desc);
-ENGINE_API ISurface*               surfaceCreate(SurfaceDesc desc);
+ RendererBackendDefaults rendererDefaults();
+ Scene*                  sceneCreate();
+ IRenderer*              rendererCreate(RendererDesc desc);
+ ISurface*               surfaceCreate(SurfaceDesc desc);
+} // namespace NextVideo
+
+#ifdef __EMSCRIPTEN__
+#  include <emscripten.h>
+#  define GL_GLEXT_PROTOTYPES
+#  define EGL_EGLEXT_PROTOTYPES
+#else
+#  include <GL/glew.h>
+#endif
+#include <GL/gl.h>
+
+namespace NextVideo {
+void   glUtilRenderScreenQuad();
+void   glUtilsSetVertexAttribs(int index);
+void   glUtilRenderQuad(GLuint vbo, GLuint ebo, GLuint worldMat, GLuint viewMat, GLuint projMat);
+GLuint glUtilLoadProgram(const char* vs, const char* fs);
+
+bool checkScene(Scene* scene);
 } // namespace NextVideo

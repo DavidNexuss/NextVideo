@@ -1,6 +1,5 @@
-#include "engine.hpp"
+#include <video.hpp>
 #include <implot/implot.h>
-#include "gl.hpp"
 using namespace NextVideo;
 
 #define C                  299792458.0

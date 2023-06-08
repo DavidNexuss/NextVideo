@@ -1,5 +1,5 @@
-#include "../engine/engine.hpp"
-#include "../engine/linear.hpp"
+#include <video.hpp>
+#include <linear.hpp>
 
 #define VERIFY_FRAMEBUFFER                                                               \
   SAFETY(do {                                                                            \
@@ -13,7 +13,6 @@
 #include <glm/ext.hpp>
 #include <stdio.h>
 #define MAX_OBJECTS 512
-#include "../engine/gl.hpp"
 
 namespace NextVideo {
 ENGINE_API const char* readFile(const char* path);
