@@ -27,6 +27,7 @@ uniform float iLambda;
 uniform bool iIntegrationMode;
 uniform bool iDecayMode;
 uniform bool iAmpladaFixa;
+uniform float iAmpladaMul;
 uniform bool iNormalitzarXarxa;
 uniform float iDecayExponent;
 uniform int iExperimentSelector;
@@ -125,7 +126,7 @@ float test4(vec2 st, float t)
 float net(vec2 st, float off, float t, float separation) { 
 	float result = 0.0;
   if(iAmpladaFixa)
-    separation = 10.0 * separation / float(N);
+    separation = iAmpladaMul * separation / float(N);
 	float offset = -float(N) * separation * 0.5 + off;
 	for(int i = 0; i < N; i++) { 
 		result += light(st + vec2(0,offset), t);
