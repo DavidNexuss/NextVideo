@@ -26,7 +26,7 @@ float plotting_distance    = 500e-3;
 using namespace glm;
 
 float uLambda     = 5000e-10;
-float uAmpladaMul = 10.0;
+float uAmpladaMul = C_SEPARATION;
 
 #define LAMBDA uLambda
 
@@ -53,7 +53,7 @@ float light(vec2 st, float t) {
 float net(vec2 st, float off, float t, float separation) {
   float result = 0.0;
   if (uAmpladaFixa)
-    separation = uAmpladaMul * separation / float(N);
+    separation =  separation / float(N);
   float offset = -float(N) * separation * 0.5 + off;
   for (int i = 0; i < N; i++) {
     result += light(st + vec2(0, offset), t);
@@ -76,7 +76,7 @@ typedef float (*experiment_t)(vec2 st, float t);
 #define C_SEPARATION 0.001e-3
 
 float experimentC(vec2 st, float t) {
-  return net(st, 0.0, t, C_SEPARATION);
+  return net(st, 0.0, t, uAmpladaMul);
 }
 
 float experimentD(vec2 st, float t) {
@@ -212,7 +212,8 @@ void uiRender() {
     ImGui::Checkbox("Normalitzar xarxa", &uNormalitzarXarxa);
     ImGui::SliderFloat("Light decay exponent", &LIGHT_DECAY_EXPONENT, 1.0, 10.0);
     ImGui::SliderFloat("Zoom", &uZoom, 0.01, 50.0);
-    ImGui::SliderFloat("Amplada", &uAmpladaMul, 10.0, 50.0);
+    static float AmpladaSlider = 1.0f;
+    ImGui::SliderFloat("Amplada", &AmpladaSlider, 1.0, 10.0);
     ImGui::SliderFloat("Time", &uTime, 0.01, 10.0);
     static int lambdaSlider = 5000;
     ImGui::SliderInt("Light lambda", &lambdaSlider, 2000, 8000);
@@ -221,6 +222,7 @@ void uiRender() {
     ImGui::End();
 
     uLambda = float(lambdaSlider) * 1e-10;
+    uAmpladaMul = AmpladaSlider * C_SEPARATION;
   }
 
 

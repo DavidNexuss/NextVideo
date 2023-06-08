@@ -126,7 +126,7 @@ float test4(vec2 st, float t)
 float net(vec2 st, float off, float t, float separation) { 
 	float result = 0.0;
   if(iAmpladaFixa)
-    separation = iAmpladaMul * separation / float(N);
+    separation = separation / float(N);
 	float offset = -float(N) * separation * 0.5 + off;
 	for(int i = 0; i < N; i++) { 
 		result += light(st + vec2(0,offset), t);
@@ -154,7 +154,7 @@ float experimentB(vec2 st, float t) {
 #define C_SEPARATION 0.001e-3
 
 float experimentC(vec2 st, float t) {
-	return net(st, 0.0,t, C_SEPARATION);
+	return net(st, 0.0,t, iAmpladaMul);
 }
 
 float experimentD(vec2 st, float t) { 
