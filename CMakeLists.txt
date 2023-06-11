@@ -29,6 +29,7 @@ add_library(NextVideo ${ENGINE})
 add_library(NextVideoGL ${GL})
 target_link_libraries(NextVideo glfw glm imgui implot)
 target_include_directories(NextVideo PUBLIC include lib lib/imgui)
+target_include_directories(NextVideoGL PUBLIC include lib lib/imgui)
 target_link_libraries(NextVideoGL glew NextVideo)
 
 file(GLOB FDM srcTests/fdm.cpp)

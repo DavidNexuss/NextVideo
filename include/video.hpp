@@ -334,14 +334,15 @@ namespace NextVideo {
     };
 
     virtual int beginPath(int index = -1) = 0;
-    virtual void flush() = 0;
-    virtual void draw();
     virtual void pushVertex(CanvasContextVertex vtx) = 0;
     virtual void pushIndex(int idx) = 0;
+    virtual void flush() = 0;
 
     virtual void setViewTransform(const glm::mat4& tr)= 0;
     virtual void setProjectionTransform(const glm::mat4& tr) = 0;
     virtual void setModelTransform(const glm::mat4& tr) = 0;
+
+    virtual void draw(int index) = 0;
   };
 
   struct ICanvas {

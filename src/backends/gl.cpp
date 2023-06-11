@@ -581,6 +581,7 @@ ENGINE_API void GLAPIENTRY MessageCallback(GLenum source, GLenum type, GLuint id
 }
 
 ENGINE_API IRenderer* rendererCreate(RendererDesc desc) {
+  dprintf(2, "[RENDERER] Creating renderer " __DATE__ "  " __TIME__ "\n");
   VERIFY(desc.surface != nullptr, "Invalid surface");
   Renderer* renderer = new Renderer(desc);
   renderer->desc     = desc;
@@ -753,10 +754,14 @@ namespace NextVideo {
 
     void flush() override { 
       batches[currentBatch].flush();
-      bindBatch(currentBatch);
-      glUseProgram(renderingProgram);
-      glDrawElements(GL_TRIANGLES, batches[currentBatch].count(), GL_UNSIGNED_INT, 0);
     };
+
+    void draw(int index) override { 
+      VERIFY(index < batches.size(), "Invalid index");
+      bindBatch(index);
+      glUseProgram(renderingProgram);
+      glDrawElements(GL_TRIANGLES, batches[index].count(), GL_UNSIGNED_INT, 0);
+    }
 
     void pushVertex(CanvasContextVertex vtx) override { batches[currentBatch].pushVertex(vtx); };
     void pushIndex(int idx) override { batches[currentBatch].pushIndex(idx); };
