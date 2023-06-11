@@ -148,7 +148,7 @@ float experimentA(vec2 st, float t) {
 }
 
 float experimentB(vec2 st, float t) { 
-	return net(st, 0.0,t, B_SEPARATION);
+	return net(st, 0.0,t, iAmpladaMul * 10.0);
 }
 
 #define C_SEPARATION 0.001e-3

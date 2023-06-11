@@ -1,3 +1,4 @@
+#include <cstring>
 #include <video.hpp>
 #include <linear.hpp>
 
@@ -642,3 +643,143 @@ ENGINE_API RendererBackendDefaults rendererDefaults() {
   return def;
 } // namespace NextVideo
 } // namespace NextVideo
+
+
+// Canvas
+
+
+namespace NextVideo { 
+
+  template <typename T>
+  struct SmartBuffer { 
+    std::vector<T> cpu;
+
+    GLuint gpu;
+    int gpuAllocatedSize;
+    GLenum target;
+    int lastCount;
+
+    SmartBuffer(GLenum target) { 
+      glGenBuffers(1, &gpu);
+      this->target = target;
+      this->gpuAllocatedSize = 0;
+    }
+
+    void push(const T& data) { 
+      cpu.push_back(data);
+    }
+
+    void flush() { 
+      if(cpu.size() == 0) return;
+      bind();
+      lastCount = cpu.size();
+      if(cpu.size() > gpuAllocatedSize) { 
+        glBufferData(target, cpu.size() * sizeof(T), cpu.data(), GL_DYNAMIC_DRAW);
+        gpuAllocatedSize = cpu.size();
+      } else { 
+        glBufferSubData(target, 0, cpu.size() * sizeof(T), cpu.data());
+      }
+      cpu.clear();
+    }
+
+    void bind() { 
+      glBindBuffer(target, gpu);
+    }
+
+    int count() { return lastCount; }
+  };
+
+  struct GLCanvasContext : public ICanvasContext{
+
+    struct BatchInformation { 
+      SmartBuffer<ICanvasContext::CanvasContextVertex> vertices;
+      SmartBuffer<unsigned int> indices;
+
+      GLuint vao;
+
+      BatchInformation() : vertices(GL_ARRAY_BUFFER), indices(GL_ELEMENT_ARRAY_BUFFER) { 
+        const int stride = sizeof(ICanvasContext::CanvasContextVertex);
+
+        glGenVertexArrays(1, &vao);
+        glBindVertexArray(vao);
+        glEnableVertexAttribArray(0);
+        glEnableVertexAttribArray(1);
+        glEnableVertexAttribArray(2);
+        vertices.bind();
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, 0);
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, (void*)(sizeof(float) * 3));
+        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, stride, (void*)(sizeof(float) * (3 + 4)));
+      }
+
+      void pushVertex(CanvasContextVertex vtx) { 
+        vertices.push(vtx);
+      }
+      void pushIndex(int idx) { 
+        indices.push(idx); 
+      }
+
+      void flush() { 
+        vertices.flush();
+        indices.flush();
+      }
+
+      int count() { return indices.count(); }
+    };
+
+    void bindBatch(int index) { 
+      if((index + 1) > batches.size())
+        batches.resize(index + 1);
+      glBindVertexArray(batches[index].vao);
+    }
+
+    GLCanvasContext() { 
+      renderingProgram = glUtilLoadProgram("assets/2d.vs", "assets/2d.fs");
+      VERIFY_OBJECT(renderingProgram);
+
+      u_ViewMat = glGetUniformLocation(renderingProgram, "u_ViewMat");
+      u_ProjMat = glGetUniformLocation(renderingProgram, "u_ProjMat");
+      u_WorldMat = glGetUniformLocation(renderingProgram, "u_WorldMat");
+
+      VERIFY_OBJECT(u_ViewMat);
+      VERIFY_OBJECT(u_ProjMat);
+      VERIFY_OBJECT(u_WorldMat);
+    }
+
+    int beginPath(int index = -1) override { 
+      if(index == -1) index = batches.size();
+      currentBatch = index;
+      return index;
+    };
+
+    void flush() override { 
+      batches[currentBatch].flush();
+      bindBatch(currentBatch);
+      glUseProgram(renderingProgram);
+      glDrawElements(GL_TRIANGLES, batches[currentBatch].count(), GL_UNSIGNED_INT, 0);
+    };
+
+    void pushVertex(CanvasContextVertex vtx) override { batches[currentBatch].pushVertex(vtx); };
+    void pushIndex(int idx) override { batches[currentBatch].pushIndex(idx); };
+
+    virtual void setViewTransform(const glm::mat4& tr) override { 
+      glUniformMatrix4fv(u_ViewMat, 1, 0, &tr[0][0]);
+    }
+    virtual void setProjectionTransform(const glm::mat4& tr) override { 
+      glUniformMatrix4fv(u_ProjMat, 1, 0, &tr[0][0]);
+    }
+    virtual void setModelTransform(const glm::mat4& tr) override { 
+      glUniformMatrix4fv(u_WorldMat, 1, 0, &tr[0][0]);
+    }
+
+    private:
+    std::vector<BatchInformation> batches;
+    int currentBatch;
+
+    GLuint renderingProgram;
+    GLuint u_ViewMat;
+    GLuint u_ProjMat;
+    GLuint u_WorldMat;
+  };
+
+  ICanvasContext* createCanvasContext() { return new GLCanvasContext;}
+}

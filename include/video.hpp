@@ -313,6 +313,7 @@ struct RendererBackendDefaults {
 #endif
 #include <GL/gl.h>
 
+// GL Utils
 namespace NextVideo {
 void   glUtilRenderScreenQuad();
 void   glUtilsSetVertexAttribs(int index);
@@ -321,3 +322,41 @@ GLuint glUtilLoadProgram(const char* vs, const char* fs);
 
 bool checkScene(Scene* scene);
 } // namespace NextVideo
+  
+
+namespace NextVideo { 
+
+  struct ICanvasContext{
+    struct CanvasContextVertex { 
+      glm::vec3 position;
+      glm::vec4 color;
+      glm::vec2 uv;
+    };
+
+    virtual int beginPath(int index = -1) = 0;
+    virtual void flush() = 0;
+    virtual void draw();
+    virtual void pushVertex(CanvasContextVertex vtx) = 0;
+    virtual void pushIndex(int idx) = 0;
+
+    virtual void setViewTransform(const glm::mat4& tr)= 0;
+    virtual void setProjectionTransform(const glm::mat4& tr) = 0;
+    virtual void setModelTransform(const glm::mat4& tr) = 0;
+  };
+
+  struct ICanvas {
+
+    ICanvas(ICanvasContext* ctx) { }
+
+    virtual void setColor(glm::vec4 color) = 0;
+    virtual void setLineWidth(float lineWidth) = 0;
+
+    virtual void move(glm::vec3 position) = 0;
+    virtual void push(glm::vec3 position) = 0;
+
+    virtual void flush() = 0;
+  };
+
+  ICanvasContext* createCanvasContext();
+  ICanvas* createCanvas(ICanvasContext* ctx);
+}
