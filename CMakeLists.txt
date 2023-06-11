@@ -18,7 +18,7 @@ add_subdirectory(lib/glfw)
 add_subdirectory(lib/glm)
 add_subdirectory(lib/imgui)
 add_subdirectory(lib/implot)
-add_subdirectory(lib/assimp)
+# add_subdirectory(lib/assimp)
 add_subdirectory(lib/glew)
 
 file(GLOB_RECURSE ENGINE src/engine/*.cpp)
