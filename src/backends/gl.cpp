@@ -529,8 +529,11 @@ struct Renderer : public IRenderer {
     float* viewMat = lin::viewMatrix(stage->camPos, stage->camDir);
     float* projMat = lin::projMatrix(desc.surface->ra());
 
-    VERIFY(stage->skyTexture >= 0 && stage->skyTexture < scene->textures.size(), "Invalid sky texture\n");
-    glUniform1i(renderer->pbr_u_envMap, stage->skyTexture + TEXT_START_USER);
+    //TODO HINT
+    if(stage->skyTexture >= 0) { 
+      VERIFY(stage->skyTexture >= 0 && stage->skyTexture < scene->textures.size(), "Invalid sky texture\n");
+      glUniform1i(renderer->pbr_u_envMap, stage->skyTexture + TEXT_START_USER);
+    }
     glUniform3f(renderer->pbr_u_ro, stage->camPos.x, stage->camPos.y, stage->camPos.z);
     glUniform3f(renderer->pbr_u_rd, stage->camDir.x, stage->camDir.y, stage->camDir.z);
 
@@ -730,7 +733,6 @@ namespace NextVideo {
     void bindBatch(int index) { 
       if((index + 1) > batches.size())
         batches.resize(index + 1);
-      glBindVertexArray(batches[index].vao);
     }
 
     GLCanvasContext() { 
@@ -749,6 +751,7 @@ namespace NextVideo {
     int beginPath(int index = -1) override { 
       if(index == -1) index = batches.size();
       currentBatch = index;
+      bindBatch(index);
       return index;
     };
 
@@ -758,7 +761,7 @@ namespace NextVideo {
 
     void draw(int index) override { 
       VERIFY(index < batches.size(), "Invalid index");
-      bindBatch(index);
+      glBindVertexArray(batches[index].vao);
       glUseProgram(renderingProgram);
       glDrawElements(GL_TRIANGLES, batches[index].count(), GL_UNSIGNED_INT, 0);
     }

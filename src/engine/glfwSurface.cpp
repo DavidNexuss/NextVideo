@@ -118,6 +118,8 @@ struct GLFWSurface : public ISurface {
     Window* windowInstance      = new Window;
     windowInstance->windowPtr   = window;
     windowInstance->needsUpdate = true;
+    windowInstance->width = width;
+    windowInstance->height = height;
     glfwSetWindowUserPointer(window, windowInstance);
     return windowInstance;
   }

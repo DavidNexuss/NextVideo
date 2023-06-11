@@ -6,8 +6,8 @@ using namespace NextVideo;
 struct Canvas : public ICanvas{
 
   struct Batch {
-    int baseIndex = 0;
     int currentIndex = 0;
+    std::vector<int> indexStack;
   };
 
   Batch batch;
@@ -24,18 +24,33 @@ struct Canvas : public ICanvas{
     this->currentLineWidth = lineWidth;
   };
 
-  void move(glm::vec3 position) override { 
-    if(batch.baseIndex != 0) { 
-      ctx->pushIndex(batch.baseIndex);
+  void resetIndex() { 
+    batch.indexStack.clear();
+  }
+
+  void pushIndex() { 
+    if(batch.indexStack.size() == 2) { 
+      this->ctx->pushIndex(batch.indexStack[0]);
+      this->ctx->pushIndex(batch.indexStack[1]);
+      this->ctx->pushIndex(batch.currentIndex);
+
+      batch.indexStack[0] = batch.indexStack[1];
+      batch.indexStack[1] = batch.currentIndex;
     }
-    batch.baseIndex = batch.currentIndex;
+    else {
+      batch.indexStack.push_back(batch.currentIndex);
+    }
+    batch.currentIndex++;
+  }
+
+  void move(glm::vec3 position) override { 
+    resetIndex();
     push(position);
   };
 
   void push(glm::vec3 position) override { 
     ctx->pushVertex(getVertex(position));
-    ctx->pushIndex(batch.currentIndex);
-    batch.currentIndex++;
+    pushIndex();
   };
 
 
@@ -48,7 +63,7 @@ struct Canvas : public ICanvas{
   }
 
   void flush() override { 
-    ctx->pushIndex(batch.baseIndex);
+    resetIndex();
   }
 
   private:
