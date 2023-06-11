@@ -250,7 +250,7 @@ struct Renderer : public IRenderer {
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
       glFramebufferTexture2D(GL_FRAMEBUFFER, attachment, GL_TEXTURE_2D, textures[textureSlot], 0);
-      LOG("[RENDERER] Generated screen texture for %d to attachment %d -> %d\n", textureSlot, attachment, textures[textureSlot]);
+      LOG("[RENDERER] Generated screen texture for %d to attachment %d -> %d for size %dx%d\n", textureSlot, attachment, textures[textureSlot], width, height);
       glActiveTexture(GL_TEXTURE0);
     }
   }
@@ -265,7 +265,7 @@ struct Renderer : public IRenderer {
       glBindRenderbuffer(GL_RENDERBUFFER, rbos[rbo]);
       glRenderbufferStorage(GL_RENDERBUFFER, type, width, height);
       glFramebufferRenderbuffer(GL_FRAMEBUFFER, attachment, GL_RENDERBUFFER, rbos[rbo]);
-      LOG("[RENDERER] Generated render buffer for %d attachment %d\n", rbo, attachment);
+      LOG("[RENDERER] Generated render buffer for %d attachment %d\n for size %dx%d\n", rbo, attachment, width, height);
     }
   }
 
