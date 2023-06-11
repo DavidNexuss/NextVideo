@@ -36,3 +36,8 @@ file(GLOB FDM srcTests/fdm.cpp)
 add_executable(fdm ${FDM})
 target_link_libraries(fdm NextVideoGL GL)
 target_include_directories(fdm PUBLIC include src/engine lib)
+
+file(GLOB TEST srcTests/test.cpp)
+add_executable(test ${TEST})
+target_link_libraries(test NextVideoGL GL)
+target_include_directories(test PUBLIC include src/engine lib)

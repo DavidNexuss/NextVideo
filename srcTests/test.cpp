@@ -1,5 +1,5 @@
-#include "../engine/engine.hpp"
-#include "../engine/linear.hpp"
+#include <video.hpp>
+#include <linear.hpp>
 
 using namespace NextVideo;
 void initScene(Scene* scene) {
