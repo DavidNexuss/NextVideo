@@ -7,13 +7,15 @@ struct Canvas : public ICanvas{
 
   struct Batch {
     int currentIndex = 0;
-    std::vector<int> indexStack;
   };
 
   Batch batch;
 
   Canvas(ICanvasContext* ctx) : ICanvas(ctx) {
     this->ctx = ctx;
+    this->ctx->setModelTransform(glm::mat4(1.0));
+    this->ctx->setProjectionTransform(glm::mat4(1.0));
+    this->ctx->setViewTransform(glm::mat4(1.0));
   }
 
   void setColor(glm::vec4 color) override { 
@@ -24,25 +26,8 @@ struct Canvas : public ICanvas{
     this->currentLineWidth = lineWidth;
   };
 
-  void resetIndex() { 
-    batch.indexStack.clear();
-  }
 
-  void pushIndex() { 
-    if(batch.indexStack.size() == 2) { 
-      this->ctx->pushIndex(batch.indexStack[0]);
-      this->ctx->pushIndex(batch.indexStack[1]);
-      this->ctx->pushIndex(batch.currentIndex);
-
-      batch.indexStack[0] = batch.indexStack[1];
-      batch.indexStack[1] = batch.currentIndex;
-    }
-    else {
-      batch.indexStack.push_back(batch.currentIndex);
-    }
-    batch.currentIndex++;
-  }
-
+  void resetIndex() { batch.currentIndex = 0; }
   void move(glm::vec3 position) override { 
     resetIndex();
     push(position);
@@ -50,7 +35,8 @@ struct Canvas : public ICanvas{
 
   void push(glm::vec3 position) override { 
     ctx->pushVertex(getVertex(position));
-    pushIndex();
+    ctx->pushIndex(batch.currentIndex);
+    batch.currentIndex++;
   };
 
 
@@ -72,6 +58,22 @@ struct Canvas : public ICanvas{
   float     currentLineWidth = 5.0;
   ICanvasContext* ctx;
 };
+
+
+void ICanvas::createCircle(glm::vec2 position, float size) { 
+
+  flush();
+  int count = 4;
+  for(int i = 0; i < count; i++) {
+    float a = 2 * M_PI * float(i / float(count));
+
+    float x = cos(a);
+    float y = sin(a);
+
+    push({x * size + position.x, y * size + position.y, 0});
+  }
+  flush();
+}
 
 ICanvas* NextVideo::createCanvas(ICanvasContext* ctx) { return new Canvas(ctx); }
 
