@@ -356,6 +356,8 @@ namespace NextVideo {
     virtual void push(glm::vec3 position) = 0;
 
     virtual void flush() = 0;
+
+    void createCircle(glm::vec2 position, float size);
   };
 
   ICanvasContext* createCanvasContext();

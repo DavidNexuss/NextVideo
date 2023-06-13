@@ -529,8 +529,11 @@ struct Renderer : public IRenderer {
     float* viewMat = lin::viewMatrix(stage->camPos, stage->camDir);
     float* projMat = lin::projMatrix(desc.surface->ra());
 
-    VERIFY(stage->skyTexture >= 0 && stage->skyTexture < scene->textures.size(), "Invalid sky texture\n");
-    glUniform1i(renderer->pbr_u_envMap, stage->skyTexture + TEXT_START_USER);
+    //TODO HINT
+    if(stage->skyTexture >= 0) { 
+      VERIFY(stage->skyTexture >= 0 && stage->skyTexture < scene->textures.size(), "Invalid sky texture\n");
+      glUniform1i(renderer->pbr_u_envMap, stage->skyTexture + TEXT_START_USER);
+    }
     glUniform3f(renderer->pbr_u_ro, stage->camPos.x, stage->camPos.y, stage->camPos.z);
     glUniform3f(renderer->pbr_u_rd, stage->camDir.x, stage->camDir.y, stage->camDir.z);
 
@@ -672,7 +675,7 @@ namespace NextVideo {
 
     void flush() { 
       if(cpu.size() == 0) return;
-      bind();
+      glBindBuffer(target, gpu);
       lastCount = cpu.size();
       if(cpu.size() > gpuAllocatedSize) { 
         glBufferData(target, cpu.size() * sizeof(T), cpu.data(), GL_DYNAMIC_DRAW);
@@ -681,10 +684,6 @@ namespace NextVideo {
         glBufferSubData(target, 0, cpu.size() * sizeof(T), cpu.data());
       }
       cpu.clear();
-    }
-
-    void bind() { 
-      glBindBuffer(target, gpu);
     }
 
     int count() { return lastCount; }
@@ -706,7 +705,7 @@ namespace NextVideo {
         glEnableVertexAttribArray(0);
         glEnableVertexAttribArray(1);
         glEnableVertexAttribArray(2);
-        vertices.bind();
+        glBindBuffer(GL_ARRAY_BUFFER, vertices.gpu);
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, 0);
         glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, (void*)(sizeof(float) * 3));
         glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, stride, (void*)(sizeof(float) * (3 + 4)));
@@ -730,7 +729,6 @@ namespace NextVideo {
     void bindBatch(int index) { 
       if((index + 1) > batches.size())
         batches.resize(index + 1);
-      glBindVertexArray(batches[index].vao);
     }
 
     GLCanvasContext() { 
@@ -749,6 +747,7 @@ namespace NextVideo {
     int beginPath(int index = -1) override { 
       if(index == -1) index = batches.size();
       currentBatch = index;
+      bindBatch(index);
       return index;
     };
 
@@ -758,21 +757,24 @@ namespace NextVideo {
 
     void draw(int index) override { 
       VERIFY(index < batches.size(), "Invalid index");
-      bindBatch(index);
+      glBindVertexArray(batches[index].vao);
       glUseProgram(renderingProgram);
-      glDrawElements(GL_TRIANGLES, batches[index].count(), GL_UNSIGNED_INT, 0);
+      glDrawElements(GL_TRIANGLE_FAN, batches[index].count(), GL_UNSIGNED_INT, 0);
     }
 
     void pushVertex(CanvasContextVertex vtx) override { batches[currentBatch].pushVertex(vtx); };
     void pushIndex(int idx) override { batches[currentBatch].pushIndex(idx); };
 
     virtual void setViewTransform(const glm::mat4& tr) override { 
+      glUseProgram(renderingProgram);
       glUniformMatrix4fv(u_ViewMat, 1, 0, &tr[0][0]);
     }
     virtual void setProjectionTransform(const glm::mat4& tr) override { 
+      glUseProgram(renderingProgram);
       glUniformMatrix4fv(u_ProjMat, 1, 0, &tr[0][0]);
     }
     virtual void setModelTransform(const glm::mat4& tr) override { 
+      glUseProgram(renderingProgram);
       glUniformMatrix4fv(u_WorldMat, 1, 0, &tr[0][0]);
     }
 
