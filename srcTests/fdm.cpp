@@ -1,3 +1,4 @@
+#include "imgui.h"
 #include <video.hpp>
 #include <implot/implot.h>
 using namespace NextVideo;
@@ -5,7 +6,7 @@ using namespace NextVideo;
 #define C                  299792458.0
 #define LIGHT_DECAY_FACTOR 1.0e-5
 #define INTEGRATION_ENABLED
-#define INTEGRATION_STEPS 4
+int INTEGRATION_STEPS = 4;
 #define GAMMA_CORRECTED   1.0
 #define A_WAVE            5000e-10
 #define A_SEPARATION      0.01e-3
@@ -17,7 +18,10 @@ int NCOUNT = 5;
 #define N NCOUNT
 bool  LIGHT_DECAY_ENABLED  = false;
 float LIGHT_DECAY_EXPONENT = 0.00002;
-float plotting_distance    = 500e-3;
+float plotting_distance    = 200e-3;
+float plotting_resolution = 10;
+int plotting_count = 4000;
+int plot_highpassWindow = 10;
 
 #define B_SEPARATION 0.01e-3
 #define C_SEPARATION 0.001e-3
@@ -105,8 +109,8 @@ struct PlotResult {
 };
 PlotResult plot(experiment_t func) {
   float x     = plotting_distance;
-  float dy    = 10.0e-7;
-  int   count = 4000;
+  float dy    = pow(10.0,-plotting_resolution);
+  int   count = plotting_count;
 
   float      current = -dy * count / 2;
   PlotResult res;
@@ -120,7 +124,7 @@ PlotResult plot(experiment_t func) {
 
 
 std::vector<int> findLocalMaximumValues(std::vector<float>& data) {
-  int              lookUpSize = 10;
+  int              lookUpSize = plot_highpassWindow;
   std::vector<int> indices;
   if (data.size() < (lookUpSize * 2 + 1)) return {};
 
@@ -218,6 +222,14 @@ void uiRender() {
     ImGui::SliderInt("Light lambda", &lambdaSlider, 2000, 8000);
     ImGui::SliderInt("N", &NCOUNT, 2, 50);
     ImGui::InputFloat("Distance", &uDistance);
+
+    ImGui::Separator();
+    ImGui::InputFloat("Plot resolution", &plotting_resolution);
+    ImGui::InputInt("Plot count", &plotting_count);
+    ImGui::InputInt("Plot high pass winow", &plot_highpassWindow);
+
+    ImGui::Separator();
+    ImGui::InputInt("Integration steps ", &INTEGRATION_STEPS);
     ImGui::End();
 
     uLambda = float(lambdaSlider) * 1e-10;
@@ -234,7 +246,7 @@ void uiRender() {
     ImGui::Checkbox("Show integration plot", &showPlot);
 
     if (showPlot) {
-      ImGui::SliderFloat("Screen distance", &plotting_distance, 0.0, 200.0e-4);
+      ImGui::SliderFloat("Screen distance", &plotting_distance, 0.0, 1.0);
       static bool currentPlot = 0;
       auto        data        = plot(currentExperiment());
 
