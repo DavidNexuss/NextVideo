@@ -1,3 +1,17 @@
+
+// ASSETS
+
+
+#define ASSET_2D_VS           "assets/core/shaders/2d.vs"
+#define ASSET_2D_FS           "assets/core/shaders/2d.fs"
+#define ASSET_FILTER_VS       "assets/core/shaders/filter.vs" 
+#define ASSET_HDR_FS          "assets/core/shaders/hdr.fs"
+#define ASSET_GAUSSS_FS       "assets/core/shaders/gauss.fs"
+#define ASSET_UPSAMPLE_FS     "assets/core/shaders/upsample.fs"
+#define ASSET_DOWNSAMPLE_FS   "assets/core/shaders/downsample.fs"
+#define ASSET_PBR_VS          "assets/core/shaders/pbr.vs" 
+#define ASSET_PBR_FS          "assets/core/shaders/pbr.fs"
+
 #include <cstring>
 #include <video.hpp>
 #include <linear.hpp>
@@ -13,6 +27,8 @@
 
 #include <glm/ext.hpp>
 #include <stdio.h>
+
+
 #define MAX_OBJECTS 512
 
 namespace NextVideo {
@@ -200,11 +216,11 @@ static int RBO_HDR_PASS_DEPTH    = 0;
   UNIFORMLIST_PBR(o, pbr)
 
 #define PROGRAMLIST(O)                                             \
-  O(hdr, "assets/filter.vs", "assets/hdr.fs")                      \
-  O(filter_gauss, "assets/filter.vs", "assets/gauss.fs")           \
-  O(filter_upsample, "assets/filter.vs", "assets/upsample.fs")     \
-  O(filter_downsample, "assets/filter.vs", "assets/downsample.fs") \
-  O(pbr, "assets/pbr.vs", "assets/pbr.fs")
+  O(hdr, ASSET_FILTER_VS, ASSET_HDR_FS)                      \
+  O(filter_gauss, ASSET_FILTER_VS, ASSET_GAUSSS_FS)           \
+  O(filter_upsample, ASSET_FILTER_VS, ASSET_UPSAMPLE_FS)     \
+  O(filter_downsample, ASSET_FILTER_VS, ASSET_DOWNSAMPLE_FS) \
+  O(pbr, ASSET_PBR_VS, ASSET_PBR_FS)
 
 struct Renderer : public IRenderer {
 
@@ -732,7 +748,7 @@ namespace NextVideo {
     }
 
     GLCanvasContext() { 
-      renderingProgram = glUtilLoadProgram("assets/2d.vs", "assets/2d.fs");
+      renderingProgram = glUtilLoadProgram(ASSET_2D_VS,  ASSET_2D_FS);
       VERIFY_OBJECT(renderingProgram);
 
       u_ViewMat = glGetUniformLocation(renderingProgram, "u_ViewMat");

@@ -21,13 +21,17 @@ const char* readFile(const char* path) {
   struct stat _stat;
   stat(path, &_stat);
 
-  if (_stat.st_size <= 0)
+  if (_stat.st_size <= 0) { 
+    LOG("[IO] File not found %s\n", path);
     return 0;
+  }
 
   int fd = open(path, O_RDONLY);
   if (fd < 0) {
+    LOG("[IO] File not found %s\n", path);
     return 0;
   }
+
 
   char* buffer          = (char*)malloc(_stat.st_size + 1);
   buffer[_stat.st_size] = 0;
