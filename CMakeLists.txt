@@ -25,6 +25,7 @@ file(GLOB_RECURSE ENGINE src/engine/*.cpp)
 file(GLOB GL src/backends/gl.cpp)
 file(GLOB VK src/backends/vk.cpp)
 
+include_directories(assets)
 add_library(NextVideo ${ENGINE})
 add_library(NextVideoGL ${GL})
 target_link_libraries(NextVideo glfw glm imgui implot)
